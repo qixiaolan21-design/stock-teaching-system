@@ -382,10 +382,15 @@ app.get('/', (req, res) => {
 });
 
 // 启动
-app.listen(PORT, () => {
-    console.log('='.repeat(60));
-    console.log('  股票教学案例管理系统 - YouTube主播运营版');
-    console.log('='.repeat(60));
-    console.log(`  🚀 服务已启动: http://localhost:${PORT}`);
-    console.log('='.repeat(60));
-});
+if (process.env.VERCEL !== '1') {
+    app.listen(PORT, () => {
+        console.log('='.repeat(60));
+        console.log('  股票教学案例管理系统 - YouTube主播运营版');
+        console.log('='.repeat(60));
+        console.log(`  🚀 服务已启动: http://localhost:${PORT}`);
+        console.log('='.repeat(60));
+    });
+}
+
+// Vercel 导出
+module.exports = app;
