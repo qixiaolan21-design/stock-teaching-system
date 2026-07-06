@@ -25,15 +25,15 @@ app.use('/uploads', express.static('uploads'));
     if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 });
 
-// 内存数据库（生产环境应使用真实数据库）
+// 内存数据库
 const db = {
-    cases: [],           // 案例记录
-    evidence: [],        // 印证案例
-    feedback: [],        // 会员反馈
-    videos: [],          // 视频记录
-    documents: [],       // 上传的文档
-    nasdaq: [],          // 纳指数据
-    stockPrices: {}      // 股票价格缓存
+    cases: [],
+    evidence: [],
+    feedback: [],
+    videos: [],
+    documents: [],
+    nasdaq: [],
+    stockPrices: {}
 };
 
 // 文件上传配置
@@ -48,9 +48,8 @@ const upload = multer({ storage, limits: { fileSize: 100 * 1024 * 1024 } });
 
 const parser = new DocumentParser();
 
-// ========== 初始化演示数据 ==========
+// 初始化演示数据
 function initDemoData() {
-    // 纳指数据
     const today = new Date();
     for (let i = 90; i >= 0; i--) {
         const date = new Date(today);
@@ -70,7 +69,6 @@ initDemoData();
 
 // ========== API 路由 ==========
 
-// 统计
 app.get('/api/stats', (req, res) => {
     res.json({
         caseCount: db.cases.length,
@@ -81,7 +79,7 @@ app.get('/api/stats', (req, res) => {
     });
 });
 
-// ========== 1. 案例记录 - 文档上传自动提取 ==========
+// ========== 1. 文档上传 - 案例记录 ==========
 
 app.post('/api/documents/upload', upload.single('document'), async (req, res) => {
     try {
@@ -90,13 +88,27 @@ app.post('/api/documents/upload', upload.single('document'), async (req, res) =>
         const { originalname, filename, path: filePath } = req.file;
         const ext = path.extname(originalname).toLowerCase();
         
+        console.log('上传文件:', originalname, '类型:', ext);
+        
         // 提取文本
         let text = '';
-        if (ext === '.pptx' || ext === '.docx') {
-            text = await extractOfficeText(filePath, ext);
-        } else {
+        
+        if (ext === '.txt' || ext === '.csv') {
             text = fs.readFileSync(filePath, 'utf-8');
+        } else if (ext === '.pptx' || ext === '.docx') {
+            text = await extractOfficeText(filePath, ext);
+        } else if (ext === '.pdf') {
+            try {
+                text = fs.readFileSync(filePath, 'utf-8');
+            } catch (e) {
+                text = extractBinaryText(fs.readFileSync(filePath));
+            }
+        } else {
+            text = extractBinaryText(fs.readFileSync(filePath));
         }
+        
+        console.log('提取文本长度:', text.length);
+        console.log('文本前500字符:', text.substring(0, 500));
         
         // 解析股票信息
         const parseResult = parser.extractStockInfo(text, originalname);
@@ -107,36 +119,44 @@ app.post('/api/documents/upload', upload.single('document'), async (req, res) =>
             id: docId,
             filename,
             original_name: originalname,
+            file_type: ext,
             upload_date: new Date().toISOString(),
-            stock_count: parseResult.stocks.length,
-            preview: text.substring(0, 1000)
+            extracted_text: text.substring(0, 5000),
+            stock_count: parseResult.stocks.length
         });
         
         // 添加到案例库
         const today = new Date().toISOString().split('T')[0];
-        parseResult.stocks.forEach((stock, i) => {
-            if (!db.cases.find(c => c.stock_code === stock.stock_code && c.date === today)) {
+        let addedCount = 0;
+        
+        for (const stock of parseResult.stocks) {
+            const exists = db.cases.find(c => 
+                c.stock_code === stock.stock_code && c.date === today
+            );
+            if (!exists) {
                 db.cases.push({
-                    id: Date.now() + i,
+                    id: Date.now() + addedCount,
                     date: today,
                     ...stock,
-                    source_type: 'document',
-                    source_name: originalname
+                    source_doc: originalname
                 });
+                addedCount++;
             }
-        });
+        }
         
         res.json({
             success: true,
             documentId: docId,
             filename: originalname,
+            fileType: ext,
             parsed: parseResult,
-            addedCount: parseResult.stocks.length
+            addedToCases: addedCount,
+            preview: text.substring(0, 1000)
         });
         
     } catch (error) {
-        console.error('Upload error:', error);
-        res.status(500).json({ error: error.message });
+        console.error('解析文档失败:', error);
+        res.status(500).json({ error: '解析失败: ' + error.message });
     }
 });
 
@@ -148,30 +168,63 @@ async function extractOfficeText(filePath, ext) {
         let text = '';
         
         if (ext === '.pptx') {
-            // 提取所有幻灯片
-            const slides = Object.keys(zip.files).filter(f => 
-                f.match(/ppt\/slides\/slide\d+\.xml/)
+            // PPTX: 提取所有幻灯片文本
+            const slideFiles = Object.keys(zip.files).filter(f => 
+                f.startsWith('ppt/slides/slide') && f.endsWith('.xml')
             );
-            for (const slide of slides.sort()) {
-                const content = await zip.files[slide].async('text');
-                const matches = content.match(/<a:t>([^<]+)<\/a:t>/g);
-                if (matches) {
-                    text += `[第${slide.match(/slide(\d+)/)[1]}页] `;
-                    text += matches.map(m => m.replace(/<\/?a:t>/g, '')).join(' ') + '\n';
+            
+            console.log(`找到 ${slideFiles.length} 页幻灯片`);
+            
+            for (const slideFile of slideFiles.sort()) {
+                try {
+                    const content = await zip.files[slideFile].async('text');
+                    const pageNum = slideFile.match(/slide(\d+)\.xml/)?.[1] || '?';
+                    
+                    // 提取 <a:t> 标签文本
+                    const textMatches = content.match(/<a:t>([^<]+)<\/a:t>/g);
+                    if (textMatches && textMatches.length > 0) {
+                        const slideText = textMatches
+                            .map(m => m.replace(/<\/?a:t>/g, ''))
+                            .join(' ');
+                        text += `[第${pageNum}页] ${slideText}\n`;
+                    }
+                } catch (e) {
+                    console.error(`解析 ${slideFile} 失败:`, e.message);
                 }
             }
         } else if (ext === '.docx') {
+            // DOCX: 提取文档文本
             const docXml = zip.files['word/document.xml'];
             if (docXml) {
                 const content = await docXml.async('text');
                 const matches = content.match(/<w:t>([^<]+)<\/w:t>/g);
-                if (matches) text = matches.map(m => m.replace(/<\/?w:t>/g, '')).join(' ');
+                if (matches) {
+                    text = matches.map(m => m.replace(/<\/?w:t>/g, '')).join(' ');
+                }
             }
         }
+        
         return text;
     } catch (e) {
-        return fs.readFileSync(filePath, 'utf-8');
+        console.error('Office提取失败:', e);
+        return extractBinaryText(fs.readFileSync(filePath));
     }
+}
+
+// 从二进制提取可读文本
+function extractBinaryText(buffer) {
+    let text = '';
+    const str = buffer.toString('utf-8');
+    
+    // 提取中文字符
+    const chineseMatches = str.match(/[\u4e00-\u9fa5]{2,}/g);
+    if (chineseMatches) text += chineseMatches.join(' ');
+    
+    // 提取股票代码（6位数字）
+    const stockMatches = str.match(/\d{6}/g);
+    if (stockMatches) text += ' ' + stockMatches.join(' ');
+    
+    return text;
 }
 
 // 获取案例列表
@@ -184,14 +237,13 @@ app.get('/api/cases', (req, res) => {
 
 // ========== 2. 印证案例库 - PPT课件管理 ==========
 
-// 上传PPT作为印证案例
 app.post('/api/evidence/upload', upload.single('ppt'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: '没有上传PPT' });
         
         const { originalname, filename, path: filePath } = req.file;
         
-        // 提取PPT所有页面文本
+        // 提取PPT所有页面
         const data = fs.readFileSync(filePath);
         const zip = await JSZip.loadAsync(data);
         const slides = [];
@@ -206,7 +258,6 @@ app.post('/api/evidence/upload', upload.single('ppt'), async (req, res) => {
             const slideText = textMatches ? 
                 textMatches.map(m => m.replace(/<\/?a:t>/g, '')).join(' ') : '';
             
-            // 解析每页的股票
             const pageNum = parseInt(slideFile.match(/slide(\d+)/)[1]);
             const stocks = parser.extractStockInfo(slideText);
             
@@ -283,10 +334,9 @@ app.get('/api/feedback', (req, res) => {
     res.json({ feedback: result.sort((a, b) => b.id - a.id) });
 });
 
-// ========== 4. 图表展示 - 纳指K线 ==========
+// ========== 4. 图表展示 ==========
 
 app.get('/api/chart/data', (req, res) => {
-    // 整理案例数据按日期
     const caseByDate = {};
     db.cases.forEach(c => {
         if (!caseByDate[c.date]) caseByDate[c.date] = [];
@@ -299,21 +349,13 @@ app.get('/api/chart/data', (req, res) => {
         evidenceByDate[e.date]++;
     });
     
-    res.json({
-        nasdaq: db.nasdaq,
-        cases: caseByDate,
-        evidence: evidenceByDate
-    });
+    res.json({ nasdaq: db.nasdaq, cases: caseByDate, evidence: evidenceByDate });
 });
 
-// ========== 5. 股票验证（高级功能） ==========
+// ========== 5. 股票验证 ==========
 
-// 模拟股票验证（实际应接入真实API）
 app.get('/api/stock/verify/:code', async (req, res) => {
     const { code } = req.params;
-    
-    // 这里应该接入真实股票API
-    // 模拟返回
     res.json({
         stock_code: code,
         current_price: (Math.random() * 100 + 10).toFixed(2),
@@ -323,7 +365,6 @@ app.get('/api/stock/verify/:code', async (req, res) => {
     });
 });
 
-// 批量验证
 app.post('/api/stock/verify-batch', async (req, res) => {
     const { codes } = req.body;
     const results = codes.map(code => ({
