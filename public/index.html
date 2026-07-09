@@ -948,6 +948,14 @@
             `;
 
             document.getElementById('caseDetailModal').classList.add('show');
+            
+            // 延迟加载大图
+            setTimeout(() => {
+                const img = document.querySelector('#caseDetailContent img[data-src]');
+                if (img) {
+                    img.src = img.dataset.src;
+                }
+            }, 100);
         }
 
         // PPT库
@@ -972,11 +980,12 @@
                     </div>
                     ${p.slides && p.slides.length > 0 ? `
                     <div class="ppt-preview">
-                        ${p.slides.slice(0, 3).map(s => `<img src="${s.path}">`).join('')}
+                        ${p.slides.slice(0, 3).map(s => `<img src="${s.path}" loading="lazy" style="width: 100%; height: 60px; object-fit: cover;">`).join('')}
                     </div>
                     ` : ''}
                     <div class="case-body">
                         ${p.verificationType ? `<div class="case-info-row"><span class="case-label">类型</span><span class="case-value">${p.verificationType}</span></div>` : ''}
+                        ${p.extractedCases?.length > 0 ? `<div class="case-info-row"><span class="case-label">识别案例</span><span class="case-value" style="color: #48bb78;">${p.extractedCases.length}个</span></div>` : ''}
                         <div class="case-tags">${p.tags?.map(t => `<span class="case-tag">${t}</span>`).join('') || ''}</div>
                     </div>
                     <div class="case-actions">
@@ -1408,17 +1417,23 @@
                     document.getElementById('pptSlideCount').textContent = extractedPptSlides.length;
                     document.getElementById('pptUploadDate').value = new Date().toISOString().split('T')[0];
                     
-                    // 显示智能筛选结果
+                    // 显示智能筛选结果（限制显示数量）
                     const slidesGrid = document.getElementById('pptSlidesGrid');
-                    if (extractedPptSlides.length > 0) {
-                        slidesGrid.innerHTML = extractedPptSlides.map(s => `
+                    const displaySlides = extractedPptSlides.slice(0, 20); // 最多显示20张
+                    
+                    if (displaySlides.length > 0) {
+                        slidesGrid.innerHTML = displaySlides.map(s => `
                             <div class="slide-item ${s.isStockChart ? 'stock-chart' : ''}" title="${s.analysis?.reason || ''}">
                                 <span class="slide-number">${s.slideNumber}</span>
                                 ${s.isStockChart ? '<span style="position: absolute; top: 5px; right: 5px; background: #48bb78; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;">📈</span>' : ''}
-                                <img src="${s.path}" onclick="window.open('${s.path}', '_blank')">
+                                <img src="${s.path}" loading="lazy" onclick="window.open('${s.path}', '_blank')" style="width: 100%; height: 100px; object-fit: cover;">
                                 ${s.stockInfo?.stocks?.length > 0 ? `<div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); color: white; padding: 3px; font-size: 11px; text-align: center;">${s.stockInfo.stocks.map(st => st.code).join(', ')}</div>` : ''}
                             </div>
                         `).join('');
+                        
+                        if (extractedPptSlides.length > 20) {
+                            slidesGrid.innerHTML += `<p style="color: #999; text-align: center; padding: 10px;">还有 ${extractedPptSlides.length - 20} 张页面未显示</p>`;
+                        }
                     } else {
                         slidesGrid.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">未识别到K线图页面</p>';
                     }

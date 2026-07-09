@@ -181,25 +181,26 @@ app.post('/api/import', (req, res) => {
 });
 
 // 智能分析图片是否包含K线图特征
-function analyzeImageForStockChart(imageBuffer) {
-    // 这里使用简单的启发式算法
-    // 实际生产环境可以使用 TensorFlow.js 或调用 AI API
-    
+function analyzeImageForStockChart(imageBuffer, fileName) {
     // 检查图片文件名是否包含股票相关关键词
-    const stockKeywords = ['chart', 'kline', 'candle', 'stock', 'price', 'trend', 'analysis'];
+    const stockKeywords = ['chart', 'kline', 'candle', 'stock', 'price', 'trend', 'analysis', 'graph', '走势', 'K线', '图表'];
+    const hasKeyword = stockKeywords.some(kw => fileName.toLowerCase().includes(kw.toLowerCase()));
     
-    // 检查图片大小（K线图通常较大）
-    const isLargeEnough = imageBuffer.length > 50000; // 大于50KB
+    // 检查图片大小（K线图通常较大，但不超过一定范围）
+    const size = imageBuffer.length;
+    const isGoodSize = size > 30000 && size < 2000000; // 30KB - 2MB
     
     // 简单的评分系统
     let score = 0;
-    if (isLargeEnough) score += 30;
+    if (isGoodSize) score += 20;
+    if (hasKeyword) score += 10;
+    if (size > 100000) score += 10; // 大于100KB加分
     
     // 返回分析结果
     return {
-        isLikelyStockChart: score >= 30,
+        isLikelyStockChart: score >= 20,
         confidence: score,
-        reason: isLargeEnough ? '图片尺寸符合K线图特征' : '图片尺寸较小'
+        reason: isGoodSize ? '图片尺寸符合K线图特征' : '图片尺寸不合适'
     };
 }
 
@@ -340,19 +341,29 @@ function extractPptImages(pptxPath, outputDir) {
         
         console.log(`找到 ${allImages.length} 张图片，开始智能分析...`);
         
-        // 分析每张图片
-        allImages.forEach((img, index) => {
+        // 分析每张图片（限制最多处理30张，避免性能问题）
+        const maxImages = Math.min(allImages.length, 30);
+        console.log(`找到 ${allImages.length} 张图片，将分析前 ${maxImages} 张...`);
+        
+        for (let index = 0; index < maxImages; index++) {
+            const img = allImages[index];
             const slideNumber = index + 1;
             const ext = path.extname(img.entryName);
             const imageName = `slide-${slideNumber}${ext}`;
             const imagePath = path.join(outputDir, imageName);
             
             // 分析图片是否可能是K线图
-            const analysis = analyzeImageForStockChart(img.data);
+            const analysis = analyzeImageForStockChart(img.data, img.entryName);
             
-            // 提取幻灯片文本
-            const slideTexts = extractSlideText(pptxPath, slideNumber);
-            const stockInfo = extractStockInfoFromText(slideTexts);
+            // 只处理可能是K线图的页面，减少性能开销
+            let slideTexts = [];
+            let stockInfo = { stocks: [], methods: [], prices: [], rawText: '' };
+            
+            if (analysis.isLikelyStockChart) {
+                // 提取幻灯片文本（仅对可能是K线图的页面）
+                slideTexts = extractSlideText(pptxPath, slideNumber);
+                stockInfo = extractStockInfoFromText(slideTexts);
+            }
             
             // 保存图片
             fs.writeFileSync(imagePath, img.data);
@@ -364,7 +375,7 @@ function extractPptImages(pptxPath, outputDir) {
                 originalName: img.entryName,
                 analysis: analysis,
                 isStockChart: analysis.isLikelyStockChart || stockInfo.stocks.length > 0,
-                extractedText: slideTexts.slice(0, 10), // 前10条文本
+                extractedText: slideTexts.slice(0, 5), // 减少存储的文本量
                 stockInfo: stockInfo
             };
             
@@ -381,7 +392,7 @@ function extractPptImages(pptxPath, outputDir) {
                     confidence: analysis.confidence + (stockInfo.stocks.length * 20)
                 });
             }
-        });
+        }
         
         console.log(`分析完成，识别出 ${extractedCases.length} 个潜在案例`);
         
