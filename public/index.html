@@ -3,319 +3,1516 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>股票教学案例管理系统</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>📈 股票案例印证知识库</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
     <style>
-        .section { display: none; }
-        .section.active { display: block; }
-        .drop-zone {
-            border: 2px dashed #ccc;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #667eea;
+            --secondary: #764ba2;
+            --success: #48bb78;
+            --warning: #ed8936;
+            --danger: #f56565;
+            --dark: #1a202c;
+            --gray: #718096;
+            --light: #f7fafc;
+            --border: #e2e8f0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+            min-height: 100vh;
+            color: var(--dark);
+        }
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 20px 0;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .logo { font-size: 22px; font-weight: bold; }
+        .nav-tabs { display: flex; gap: 5px; flex-wrap: wrap; }
+        .nav-tab {
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            opacity: 0.8;
+            font-size: 14px;
+        }
+        .nav-tab:hover, .nav-tab.active { background: rgba(255,255,255,0.2); opacity: 1; }
+        .main-container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .search-section {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .search-box { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        .search-input {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px 16px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 15px;
+        }
+        .search-input:focus { outline: none; border-color: var(--primary); }
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-primary { background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }
+        .btn-secondary { background: var(--light); color: var(--dark); border: 1px solid var(--border); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-sm { padding: 8px 14px; font-size: 13px; }
+        .tag-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+        .tag {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+            user-select: none;
+        }
+        .content-section { display: none; }
+        .content-section.active { display: block; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+        .stat-icon { font-size: 32px; margin-bottom: 8px; }
+        .stat-value { font-size: 28px; font-weight: bold; color: var(--primary); }
+        .stat-label { color: var(--gray); margin-top: 5px; font-size: 13px; }
+        .case-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 15px;
+        }
+        .case-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        .case-card:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+        .case-header {
+            padding: 16px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+        }
+        .case-title { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+        .case-date { opacity: 0.9; font-size: 13px; }
+        .case-body { padding: 16px; }
+        .case-info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+        .case-info-row:last-child { border-bottom: none; }
+        .case-label { color: var(--gray); }
+        .case-value { font-weight: 600; }
+        .case-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+        .case-tag {
+            padding: 3px 10px;
+            background: var(--light);
+            border-radius: 12px;
+            font-size: 12px;
+            color: var(--gray);
+        }
+        .case-actions {
+            display: flex;
+            gap: 8px;
+            padding: 12px 16px;
+            border-top: 1px solid var(--border);
+        }
+        .case-actions .btn { flex: 1; justify-content: center; padding: 8px; font-size: 12px; }
+        .form-section {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .form-title {
+            font-size: 18px;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px; }
+        .form-label .required { color: var(--danger); }
+        .form-input, .form-textarea, .form-select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 14px;
+        }
+        .form-input:focus, .form-textarea:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        .form-textarea { min-height: 100px; resize: vertical; }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .chart-container {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+        .chart-title { font-size: 16px; margin-bottom: 15px; font-weight: 600; }
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            max-width: 700px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: modalSlide 0.3s ease;
+        }
+        .modal-content.wide { max-width: 1000px; }
+        .modal-content.xwide { max-width: 1200px; }
+        @keyframes modalSlide {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-title { font-size: 18px; }
+        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray); }
+        .modal-body { padding: 20px; }
+        .data-actions { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .json-editor {
+            width: 100%;
+            min-height: 300px;
+            font-family: monospace;
+            font-size: 13px;
+            padding: 15px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            resize: vertical;
+        }
+        .empty-state { text-align: center; padding: 50px 20px; color: var(--gray); }
+        .empty-icon { font-size: 56px; margin-bottom: 15px; }
+        .extract-result {
+            background: #f0fff4;
+            border: 1px solid #9ae6b4;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 15px;
+        }
+        .extract-section { margin-bottom: 12px; }
+        .extract-section-title { font-weight: bold; color: #22543d; margin-bottom: 6px; font-size: 14px; }
+        .extract-item {
+            display: inline-block;
+            padding: 3px 10px;
+            background: white;
+            border-radius: 12px;
+            margin: 3px;
+            font-size: 13px;
+        }
+        .slide-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 10px;
+            background: #f7fafc;
+            border-radius: 10px;
+        }
+        .slide-item {
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: pointer;
             transition: all 0.3s;
         }
-        .drop-zone:hover, .drop-zone.dragover {
-            border-color: #3b82f6;
-            background: #eff6ff;
+        .slide-item:hover { transform: scale(1.02); }
+        .slide-item.selected { box-shadow: 0 0 0 3px var(--primary); }
+        .slide-item img {
+            width: 100%;
+            height: 100px;
+            object-fit: cover;
         }
-        .slide-preview {
-            border: 1px solid #e5e7eb;
-            transition: all 0.2s;
+        .slide-number {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
         }
-        .slide-preview:hover {
-            border-color: #3b82f6;
-            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+        .ppt-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            transition: all 0.3s;
+        }
+        .ppt-card:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+        .ppt-preview {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            padding: 10px;
+            background: #f7fafc;
+        }
+        .ppt-preview img {
+            width: 100%;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+        .search-results {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .search-result-item {
+            padding: 15px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .search-result-item:hover { background: var(--light); }
+        .search-result-item:last-child { border-bottom: none; }
+        .result-ppt-title { font-weight: 600; color: var(--primary); margin-bottom: 5px; }
+        .result-match-info { font-size: 13px; color: var(--gray); }
+        .result-preview-img {
+            width: 120px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        @media (max-width: 768px) {
+            .header-content { flex-direction: column; }
+            .nav-tabs { justify-content: center; }
+            .search-box { flex-direction: column; }
+            .case-grid { grid-template-columns: 1fr; }
+            .form-row { grid-template-columns: 1fr; }
         }
     </style>
 </head>
-<body class="bg-gray-50">
-    <!-- 顶部导航 -->
-    <nav class="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between items-center h-16">
-                <div class="flex items-center space-x-3">
-                    <i class="fas fa-chart-line text-2xl"></i>
-                    <span class="text-xl font-bold">股票教学案例管理系统</span>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">📈 股票案例印证知识库</div>
+            <nav class="nav-tabs">
+                <div class="nav-tab active" data-tab="dashboard">📊 总览</div>
+                <div class="nav-tab" data-tab="cases">📚 案例</div>
+                <div class="nav-tab" data-tab="ppt">📑 PPT库</div>
+                <div class="nav-tab" data-tab="feedback">💬 反馈</div>
+                <div class="nav-tab" data-tab="data">💾 数据</div>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <section class="search-section">
+            <div class="search-box">
+                <input type="text" class="search-input" id="globalSearch" placeholder="搜索股票名称、代码、方法、标签...">
+                <button class="btn btn-primary" onclick="performSearch()">🔍 搜索</button>
+                <button class="btn btn-secondary" onclick="showExtractModal()">🤖 AI提取</button>
+                <button class="btn btn-success" onclick="showAddCaseModal()">➕ 案例</button>
+                <button class="btn btn-warning" onclick="showUploadPptModal()">📤 上传PPT</button>
+            </div>
+            <div class="tag-filters" id="tagFilters"></div>
+            <div id="searchResultsContainer"></div>
+        </section>
+
+        <section class="content-section active" id="dashboard">
+            <div class="stats-grid" id="statsGrid"></div>
+            <div class="chart-container">
+                <h3 class="chart-title">📈 案例趋势（最近30天）</h3>
+                <canvas id="trendChart" height="250"></canvas>
+            </div>
+            <div class="form-section">
+                <h3 class="form-title">⚡ 快速操作</h3>
+                <div class="data-actions">
+                    <button class="btn btn-primary" onclick="showAddCaseModal()">➕ 添加案例</button>
+                    <button class="btn btn-success" onclick="showUploadPptModal()">📤 上传PPT</button>
+                    <button class="btn btn-secondary" onclick="showAddFeedbackModal()">📝 添加反馈</button>
+                    <button class="btn btn-warning" onclick="exportAllData()">📤 导出数据</button>
                 </div>
-                <div class="text-sm opacity-80">YouTube主播运营专用</div>
+            </div>
+        </section>
+
+        <section class="content-section" id="cases">
+            <div class="form-section">
+                <div class="form-title">
+                    <span>📚 历史案例库</span>
+                    <button class="btn btn-primary btn-sm" onclick="showAddCaseModal()">➕ 添加</button>
+                </div>
+                <div class="case-grid" id="casesGrid"></div>
+            </div>
+        </section>
+
+        <section class="content-section" id="ppt">
+            <div class="form-section">
+                <div class="form-title">
+                    <span>📑 PPT库</span>
+                    <button class="btn btn-success btn-sm" onclick="showUploadPptModal()">📤 上传PPT</button>
+                </div>
+                <div class="case-grid" id="pptGrid"></div>
+            </div>
+        </section>
+
+        <section class="content-section" id="feedback">
+            <div class="form-section">
+                <div class="form-title">
+                    <span>💬 学员反馈</span>
+                    <button class="btn btn-secondary btn-sm" onclick="showAddFeedbackModal()">📝 添加</button>
+                </div>
+                <div class="case-grid" id="feedbackGrid"></div>
+            </div>
+        </section>
+
+        <section class="content-section" id="data">
+            <div class="form-section">
+                <h3 class="form-title">💾 数据管理</h3>
+                <p style="color: var(--gray); margin-bottom: 20px;">所有数据保存在服务器上。建议定期导出备份。</p>
+                <div class="form-group">
+                    <label class="form-label">数据JSON（可直接编辑）</label>
+                    <textarea class="json-editor" id="dataJsonEditor"></textarea>
+                </div>
+                <div class="data-actions">
+                    <button class="btn btn-primary" onclick="saveDataFromEditor()">💾 保存修改</button>
+                    <button class="btn btn-secondary" onclick="loadDataToEditor()">🔄 重新加载</button>
+                    <button class="btn btn-success" onclick="exportAllData()">📤 导出JSON</button>
+                    <button class="btn btn-warning" onclick="document.getElementById('importFile').click()">📥 导入JSON</button>
+                    <input type="file" id="importFile" style="display: none;" accept=".json" onchange="importFromFile(event)">
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 添加案例模态框 -->
+    <div class="modal-overlay" id="addCaseModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">➕ 添加案例</h3>
+                <button class="modal-close" onclick="closeModal('addCaseModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="caseForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">股票名称 <span class="required">*</span></label>
+                            <input type="text" class="form-input" name="stockName" required placeholder="如：苹果">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">股票代码 <span class="required">*</span></label>
+                            <input type="text" class="form-input" name="stockCode" required placeholder="如：AAPL">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">日期 <span class="required">*</span></label>
+                            <input type="date" class="form-input" name="date" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">分析方法 <span class="required">*</span></label>
+                            <select class="form-select" name="method" required>
+                                <option value="">请选择</option>
+                                <option value="支撑压力">支撑压力</option>
+                                <option value="筹码分析">筹码分析</option>
+                                <option value="机构DeepChart">机构DeepChart</option>
+                                <option value="AI赢家K线">AI赢家K线</option>
+                                <option value="飘带">飘带</option>
+                                <option value="其他">其他</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">支撑/买点</label>
+                            <input type="text" class="form-input" name="support" placeholder="如：150美元">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">压力/卖点</label>
+                            <input type="text" class="form-input" name="resistance" placeholder="如：180美元">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">止损位</label>
+                            <input type="text" class="form-input" name="stopLoss" placeholder="如：145美元">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">目标位</label>
+                            <input type="text" class="form-input" name="target" placeholder="如：200美元">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">分析内容</label>
+                        <textarea class="form-textarea" name="content" placeholder="详细分析内容..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">标签（用逗号分隔）</label>
+                        <input type="text" class="form-input" name="tags" placeholder="如：纳斯达克,科技股,长线">
+                    </div>
+                    
+                    <!-- 关联PPT -->
+                    <div class="form-group">
+                        <label class="form-label">关联PPT（可选）</label>
+                        <select class="form-select" id="casePptSelect" onchange="loadCasePptSlides()">
+                            <option value="">不关联PPT</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="casePptSlidesContainer" style="display: none;">
+                        <label class="form-label">选择PPT页面</label>
+                        <div class="slide-grid" id="casePptSlides"></div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">💾 保存案例</button>
+                </form>
             </div>
         </div>
-    </nav>
-
-    <div class="flex">
-        <!-- 侧边栏 -->
-        <aside class="w-64 bg-white shadow-md min-h-screen">
-            <nav class="p-4 space-y-2">
-                <a href="#" onclick="showSection('dashboard')" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-lg bg-blue-50 text-blue-600" data-section="dashboard">
-                    <i class="fas fa-tachometer-alt w-5"></i><span>仪表盘</span>
-                </a>
-                <a href="#" onclick="showSection('upload-doc')" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-50" data-section="upload-doc">
-                    <i class="fas fa-file-upload w-5"></i><span>1. 案例记录</span>
-                </a>
-                <a href="#" onclick="showSection('upload-ppt')" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-50" data-section="upload-ppt">
-                    <i class="fas fa-images w-5"></i><span>2. 印证案例库</span>
-                </a>
-                <a href="#" onclick="showSection('evidence')" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-50" data-section="evidence">
-                    <i class="fas fa-search w-5"></i><span>印证案例检索</span>
-                </a>
-                <a href="#" onclick="showSection('feedback')" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-50" data-section="feedback">
-                    <i class="fas fa-comments w-5"></i><span>3. 会员反馈</span>
-                </a>
-                <a href="#" onclick="showSection('chart')" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-50" data-section="chart">
-                    <i class="fas fa-chart-area w-5"></i><span>4. 图表展示</span>
-                </a>
-                <a href="#" onclick="showSection('verify')" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-50" data-section="verify">
-                    <i class="fas fa-check-circle w-5"></i><span>5. 股票验证</span>
-                </a>
-            </nav>
-        </aside>
-
-        <!-- 主内容区 -->
-        <main class="flex-1 p-6">
-            <!-- 仪表盘 -->
-            <div id="dashboard" class="section active">
-                <div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-                    <div class="bg-white rounded-xl shadow-sm p-6">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-gray-500 text-sm">案例记录</p>
-                                <p class="text-3xl font-bold text-blue-600 mt-1" id="stat-cases">0</p>
-                            </div>
-                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                                <i class="fas fa-file-alt text-blue-600 text-xl"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-white rounded-xl shadow-sm p-6">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-gray-500 text-sm">印证案例</p>
-                                <p class="text-3xl font-bold text-purple-600 mt-1" id="stat-evidence">0</p>
-                            </div>
-                            <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                                <i class="fas fa-images text-purple-600 text-xl"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-white rounded-xl shadow-sm p-6">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-gray-500 text-sm">会员反馈</p>
-                                <p class="text-3xl font-bold text-green-600 mt-1" id="stat-feedback">0</p>
-                            </div>
-                            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                                <i class="fas fa-comments text-green-600 text-xl"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-white rounded-xl shadow-sm p-6">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-gray-500 text-sm">视频记录</p>
-                                <p class="text-3xl font-bold text-orange-600 mt-1" id="stat-videos">0</p>
-                            </div>
-                            <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                                <i class="fas fa-video text-orange-600 text-xl"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-white rounded-xl shadow-sm p-6">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-gray-500 text-sm">已验证</p>
-                                <p class="text-3xl font-bold text-red-600 mt-1" id="stat-verified">0</p>
-                            </div>
-                            <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                                <i class="fas fa-check-double text-red-600 text-xl"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 快捷操作 -->
-                <div class="bg-white rounded-xl shadow-sm p-6">
-                    <h3 class="text-lg font-semibold mb-4">快捷操作</h3>
-                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        <button onclick="showSection('upload-doc')" class="flex items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 text-left">
-                            <i class="fas fa-file-upload text-blue-600 mr-3 text-xl"></i>
-                            <div><p class="font-medium text-blue-900">上传文档</p><p class="text-sm text-blue-600">提取案例</p></div>
-                        </button>
-                        <button onclick="showSection('upload-ppt')" class="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 text-left">
-                            <i class="fas fa-images text-purple-600 mr-3 text-xl"></i>
-                            <div><p class="font-medium text-purple-900">上传PPT</p><p class="text-sm text-purple-600">印证案例</p></div>
-                        </button>
-                        <button onclick="showSection('evidence')" class="flex items-center p-4 bg-indigo-50 rounded-lg hover:bg-indigo-100 text-left">
-                            <i class="fas fa-search text-indigo-600 mr-3 text-xl"></i>
-                            <div><p class="font-medium text-indigo-900">搜索案例</p><p class="text-sm text-indigo-600">快速检索</p></div>
-                        </button>
-                        <button onclick="showSection('chart')" class="flex items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 text-left">
-                            <i class="fas fa-chart-area text-orange-600 mr-3 text-xl"></i>
-                            <div><p class="font-medium text-orange-900">查看图表</p><p class="text-sm text-orange-600">纳指走势</p></div>
-                        </button>
-                        <button onclick="showSection('verify')" class="flex items-center p-4 bg-red-50 rounded-lg hover:bg-red-100 text-left">
-                            <i class="fas fa-check-circle text-red-600 mr-3 text-xl"></i>
-                            <div><p class="font-medium text-red-900">验证涨跌</p><p class="text-sm text-red-600">批量验证</p></div>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 1. 案例记录 - 文档上传 -->
-            <div id="upload-doc" class="section">
-                <h2 class="text-2xl font-bold text-gray-800 mb-6">📄 案例记录 - 上传文档自动提取</h2>
-                
-                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-                    <div id="drop-zone-doc" class="drop-zone rounded-lg p-12 text-center cursor-pointer" onclick="document.getElementById('file-doc').click()">
-                        <i class="fas fa-cloud-upload-alt text-5xl text-gray-400 mb-4"></i>
-                        <p class="text-lg text-gray-600 mb-2">拖拽文档到此处，或点击上传</p>
-                        <p class="text-sm text-gray-400">支持 Word (.docx)、PDF (.pdf)、文本 (.txt)</p>
-                        <input type="file" id="file-doc" class="hidden" accept=".docx,.pdf,.txt" onchange="uploadDocument(this)">
-                    </div>
-                </div>
-
-                <div id="doc-result" class="hidden bg-white rounded-xl shadow-sm p-6 mb-6">
-                    <h3 class="text-lg font-semibold mb-4">📊 提取结果</h3>
-                    <div id="doc-summary" class="mb-4"></div>
-                    <div id="doc-stocks" class="space-y-3"></div>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-sm p-6">
-                    <h3 class="text-lg font-semibold mb-4">📚 历史案例记录</h3>
-                    <div id="cases-list" class="space-y-3"></div>
-                </div>
-            </div>
-
-            <!-- 2. 印证案例库 - PPT上传 -->
-            <div id="upload-ppt" class="section">
-                <h2 class="text-2xl font-bold text-gray-800 mb-6">🎯 印证案例库 - 上传PPT课件</h2>
-                
-                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-                    <div id="drop-zone-ppt" class="drop-zone rounded-lg p-12 text-center cursor-pointer" onclick="document.getElementById('file-ppt').click()">
-                        <i class="fas fa-file-powerpoint text-5xl text-orange-400 mb-4"></i>
-                        <p class="text-lg text-gray-600 mb-2">拖拽PPT课件到此处，或点击上传</p>
-                        <p class="text-sm text-gray-400">支持 PowerPoint (.pptx)</p>
-                        <input type="file" id="file-ppt" class="hidden" accept=".pptx" onchange="uploadPPT(this)">
-                    </div>
-                </div>
-
-                <!-- PPT解析结果 -->
-                <div id="ppt-result" class="hidden">
-                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-                        <h3 class="text-lg font-semibold mb-4">📑 PPT解析结果</h3>
-                        <div id="ppt-info" class="mb-4"></div>
-                        <div id="ppt-slides" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 印证案例检索 -->
-            <div id="evidence" class="section">
-                <h2 class="text-2xl font-bold text-gray-800 mb-6">🔍 印证案例检索</h2>
-                
-                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-                    <div class="flex gap-4 mb-4">
-                        <input type="text" id="search-input" placeholder="搜索标签：筹码、机构DC、密码、趋势..." class="flex-1 border rounded-lg px-4 py-3">
-                        <button onclick="searchEvidence()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700">
-                            <i class="fas fa-search mr-2"></i>搜索
-                        </button>
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                        <span class="text-sm text-gray-500 mr-2">热门标签：</span>
-                        <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full cursor-pointer hover:bg-blue-200" onclick="quickSearch('筹码')">筹码</span>
-                        <span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-full cursor-pointer hover:bg-purple-200" onclick="quickSearch('机构DC')">机构DC</span>
-                        <span class="px-3 py-1 bg-orange-100 text-orange-700 rounded-full cursor-pointer hover:bg-orange-200" onclick="quickSearch('密码')">密码</span>
-                        <span class="px-3 py-1 bg-green-100 text-green-700 rounded-full cursor-pointer hover:bg-green-200" onclick="quickSearch('趋势')">趋势</span>
-                        <span class="px-3 py-1 bg-pink-100 text-pink-700 rounded-full cursor-pointer hover:bg-pink-200" onclick="quickSearch('量能')">量能</span>
-                        <span class="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full cursor-pointer hover:bg-yellow-200" onclick="quickSearch('K线')">K线</span>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-sm p-6">
-                    <h3 class="text-lg font-semibold mb-4">🎯 检索结果</h3>
-                    <div id="evidence-list" class="space-y-3"></div>
-                </div>
-            </div>
-
-            <!-- 3. 会员反馈 -->
-            <div id="feedback" class="section">
-                <h2 class="text-2xl font-bold text-gray-800 mb-6">💬 会员反馈整理</h2>
-                
-                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-                    <h3 class="text-lg font-semibold mb-4">添加会员反馈</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <input type="date" id="fb-date" class="border rounded-lg px-3 py-2">
-                        <input type="text" id="fb-member" placeholder="会员名称" class="border rounded-lg px-3 py-2">
-                        <input type="text" id="fb-stock" placeholder="股票代码" class="border rounded-lg px-3 py-2">
-                        <input type="number" id="fb-profit" placeholder="获利金额" class="border rounded-lg px-3 py-2">
-                    </div>
-                    <div class="mt-4">
-                        <label class="block text-gray-600 mb-2">使用方法：</label>
-                        <div class="flex flex-wrap gap-2">
-                            <label class="flex items-center space-x-2 bg-gray-100 px-3 py-2 rounded-lg cursor-pointer">
-                                <input type="checkbox" class="fb-method" value="赢家K线"><span>赢家K线</span>
-                            </label>
-                            <label class="flex items-center space-x-2 bg-gray-100 px-3 py-2 rounded-lg cursor-pointer">
-                                <input type="checkbox" class="fb-method" value="筹码"><span>筹码</span>
-                            </label>
-                            <label class="flex items-center space-x-2 bg-gray-100 px-3 py-2 rounded-lg cursor-pointer">
-                                <input type="checkbox" class="fb-method" value="飘带"><span>飘带</span>
-                            </label>
-                            <label class="flex items-center space-x-2 bg-gray-100 px-3 py-2 rounded-lg cursor-pointer">
-                                <input type="checkbox" class="fb-method" value="机构DC"><span>机构DC</span>
-                            </label>
-                        </div>
-                    </div>
-                    <textarea id="fb-desc" rows="2" placeholder="反馈描述" class="w-full border rounded-lg px-3 py-2 mt-4"></textarea>
-                    <button onclick="addFeedback()" class="mt-4 bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700">保存反馈</button>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-sm p-6">
-                    <h3 class="text-lg font-semibold mb-4">反馈列表</h3>
-                    <div id="feedback-list" class="space-y-3"></div>
-                </div>
-            </div>
-
-            <!-- 4. 图表展示 -->
-            <div id="chart" class="section">
-                <h2 class="text-2xl font-bold text-gray-800 mb-6">📈 纳指走势与教学案例</h2>
-                <div class="bg-white rounded-xl shadow-sm p-4 mb-6">
-                    <div class="flex gap-4">
-                        <button onclick="loadChart()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                            <i class="fas fa-sync-alt mr-2"></i>刷新图表
-                        </button>
-                        <button onclick="generateDemo()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
-                            <i class="fas fa-database mr-2"></i>生成演示数据
-                        </button>
-                    </div>
-                </div>
-                <div class="bg-white rounded-xl shadow-sm p-6">
-                    <div id="chart-container" style="width: 100%; height: 600px;"></div>
-                </div>
-            </div>
-
-            <!-- 5. 股票验证 -->
-            <div id="verify" class="section">
-                <h2 class="text-2xl font-bold text-gray-800 mb-6">✅ 股票涨跌验证</h2>
-                
-                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-                    <h3 class="text-lg font-semibold mb-4">批量验证股票</h3>
-                    <textarea id="verify-codes" rows="4" placeholder="输入股票代码，每行一个，例如：
-600519
-000001
-300750" class="w-full border rounded-lg px-3 py-2 mb-4"></textarea>
-                    <button onclick="verifyStocks()" class="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700">
-                        <i class="fas fa-check-circle mr-2"></i>开始验证
-                    </button>
-                </div>
-
-                <div id="verify-result" class="hidden bg-white rounded-xl shadow-sm p-6">
-                    <h3 class="text-lg font-semibold mb-4">验证结果</h3>
-                    <div id="verify-list" class="space-y-3"></div>
-                </div>
-            </div>
-        </main>
     </div>
 
-    <script src="app.js"></script>
+    <!-- 上传PPT模态框 -->
+    <div class="modal-overlay" id="uploadPptModal">
+        <div class="modal-content wide">
+            <div class="modal-header">
+                <h3 class="modal-title">📤 上传PPT到PPT库</h3>
+                <button class="modal-close" onclick="closeModal('uploadPptModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 步骤1: 上传文件 -->
+                <div id="pptUploadStep1">
+                    <div class="form-group">
+                        <label class="form-label">选择PPT文件 (.pptx) <span class="required">*</span></label>
+                        <input type="file" class="form-input" id="pptFileInput" accept=".pptx,.ppt" onchange="handlePptFileSelect(event)">
+                    </div>
+                    <div id="pptUploadPreview" style="display: none; margin: 15px 0; padding: 15px; background: #f0fff4; border-radius: 10px;">
+                        <p>📄 <span id="pptFileName"></span></p>
+                    </div>
+                    <button class="btn btn-success" onclick="uploadPptFile()" id="pptUploadBtn" style="width: 100%;" disabled>📤 上传并提取页面</button>
+                </div>
+                
+                <!-- 步骤2: 填写信息并保存 -->
+                <div id="pptUploadStep2" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">PPT标题 <span class="required">*</span></label>
+                        <input type="text" class="form-input" id="pptUploadTitle" placeholder="如：2024年7月直播案例分析">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">日期 <span class="required">*</span></label>
+                            <input type="date" class="form-input" id="pptUploadDate">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">印证类型</label>
+                            <select class="form-select" id="pptUploadType">
+                                <option value="">请选择</option>
+                                <option value="筹码印证">筹码印证</option>
+                                <option value="机构DeepChart印证">机构DeepChart印证</option>
+                                <option value="AI赢家K线密码印证">AI赢家K线密码印证</option>
+                                <option value="支撑压力印证">支撑压力印证</option>
+                                <option value="飘带印证">飘带印证</option>
+                                <option value="综合印证">综合印证</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">标签（用逗号分隔）</label>
+                        <input type="text" class="form-input" id="pptUploadTags" placeholder="如：筹码,机构,AI赢家">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">提取的页面 (<span id="pptSlideCount">0</span>张)</label>
+                        <div class="slide-grid" id="pptSlidesGrid"></div>
+                    </div>
+                    <div class="data-actions">
+                        <button class="btn btn-secondary" onclick="resetPptUpload()">🔄 重新上传</button>
+                        <button class="btn btn-success" onclick="savePptToLibrary()" style="flex: 1;">💾 保存到PPT库</button>
+                    </div>
+                </div>
+                
+                <!-- 上传进度 -->
+                <div id="pptUploadProgress" style="display: none; text-align: center; padding: 30px;">
+                    <div style="font-size: 48px; margin-bottom: 15px;">⏳</div>
+                    <p>正在上传并提取页面...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查看PPT模态框 -->
+    <div class="modal-overlay" id="viewPptModal">
+        <div class="modal-content xwide">
+            <div class="modal-header">
+                <h3 class="modal-title" id="viewPptTitle">📑 PPT详情</h3>
+                <button class="modal-close" onclick="closeModal('viewPptModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="viewPptContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加反馈模态框 -->
+    <div class="modal-overlay" id="addFeedbackModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">💬 添加学员反馈</h3>
+                <button class="modal-close" onclick="closeModal('addFeedbackModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="feedbackForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">学员姓名 <span class="required">*</span></label>
+                            <input type="text" class="form-input" name="studentName" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">日期 <span class="required">*</span></label>
+                            <input type="date" class="form-input" name="date" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">反馈内容 <span class="required">*</span></label>
+                        <textarea class="form-textarea" name="content" required placeholder="学员反馈内容..."></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">使用方法</label>
+                            <select class="form-select" name="method">
+                                <option value="">请选择</option>
+                                <option value="0家K线">0家K线</option>
+                                <option value="筹码分析">筹码分析</option>
+                                <option value="机构DeepChart">机构DeepChart</option>
+                                <option value="AI赢家K线">AI赢家K线</option>
+                                <option value="飘带">飘带</option>
+                                <option value="支撑压力">支撑压力</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">收益情况</label>
+                            <input type="text" class="form-input" name="profit" placeholder="如：+20%">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">标签（用逗号分隔）</label>
+                        <input type="text" class="form-input" name="tags" placeholder="如：获利,长线,科技股">
+                    </div>
+                    <button type="submit" class="btn btn-secondary" style="width: 100%;">💾 保存反馈</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI提取模态框 -->
+    <div class="modal-overlay" id="extractModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">🤖 AI自动提取</h3>
+                <button class="modal-close" onclick="closeModal('extractModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">粘贴PPT文字内容或分析文本</label>
+                    <textarea class="form-textarea" id="extractText" rows="10" placeholder="粘贴文本内容，AI将自动提取股票、价格、方法..."></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="extractFromText()" style="width: 100%; margin-bottom: 20px;">🤖 开始提取</button>
+                <div id="extractResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查看案例详情模态框（带PPT页面） -->
+    <div class="modal-overlay" id="caseDetailModal">
+        <div class="modal-content xwide">
+            <div class="modal-header">
+                <h3 class="modal-title">📚 案例详情</h3>
+                <button class="modal-close" onclick="closeModal('caseDetailModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="caseDetailContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局状态
+        let currentTab = 'dashboard';
+        let selectedTags = [];
+        let allData = { cases: [], pptLibrary: [], feedback: [] };
+        let selectedPptFile = null;
+        let extractedPptSlides = [];
+        let currentPptFileId = null;
+        let selectedSlideNumber = null;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            setupEventListeners();
+            loadAllData();
+        });
+
+        function setupEventListeners() {
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+            });
+
+            document.getElementById('caseForm').addEventListener('submit', handleCaseSubmit);
+            document.getElementById('feedbackForm').addEventListener('submit', handleFeedbackSubmit);
+
+            document.getElementById('globalSearch').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') performSearch();
+            });
+        }
+
+        // 加载所有数据
+        async function loadAllData() {
+            try {
+                const response = await fetch('/api/data');
+                allData = await response.json();
+                refreshAll();
+            } catch (err) {
+                console.error('加载数据失败:', err);
+                initSampleData();
+            }
+        }
+
+        function initSampleData() {
+            allData = {
+                cases: [],
+                pptLibrary: [],
+                feedback: []
+            };
+            refreshAll();
+        }
+
+        function refreshAll() {
+            renderStats();
+            renderTags();
+            renderCases();
+            renderPptLibrary();
+            renderFeedback();
+            renderCharts();
+            updateCasePptSelect();
+        }
+
+        function switchTab(tabId) {
+            currentTab = tabId;
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.tab === tabId);
+            });
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.toggle('active', section.id === tabId);
+            });
+            if (tabId === 'data') loadDataToEditor();
+        }
+
+        // 统计
+        function renderStats() {
+            document.getElementById('statsGrid').innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-icon">📚</div>
+                    <div class="stat-value">${allData.cases.length}</div>
+                    <div class="stat-label">历史案例</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📑</div>
+                    <div class="stat-value">${allData.pptLibrary.length}</div>
+                    <div class="stat-label">PPT库</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">💬</div>
+                    <div class="stat-value">${allData.feedback.length}</div>
+                    <div class="stat-label">学员反馈</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🏷️</div>
+                    <div class="stat-value">${getAllTags().length}</div>
+                    <div class="stat-label">标签数量</div>
+                </div>
+            `;
+        }
+
+        function getAllTags() {
+            const tagSet = new Set();
+            [...allData.cases, ...allData.pptLibrary, ...allData.feedback].forEach(item => {
+                item.tags?.forEach(tag => tagSet.add(tag));
+            });
+            return Array.from(tagSet);
+        }
+
+        function renderTags() {
+            const tags = getAllTags();
+            const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe', '#43e97b', '#38f9d7', '#ed8936', '#ecc94b'];
+            
+            document.getElementById('tagFilters').innerHTML = tags.map((tag, i) => `
+                <span class="tag" 
+                      style="background: ${selectedTags.includes(tag) ? colors[i % colors.length] : colors[i % colors.length] + '20'}; 
+                             color: ${selectedTags.includes(tag) ? 'white' : colors[i % colors.length]};"
+                      onclick="toggleTag('${tag}')">
+                    ${tag}
+                </span>
+            `).join('');
+        }
+
+        function toggleTag(tag) {
+            const index = selectedTags.indexOf(tag);
+            if (index > -1) selectedTags.splice(index, 1);
+            else selectedTags.push(tag);
+            renderTags();
+            renderCases();
+            renderPptLibrary();
+        }
+
+        // 案例
+        function renderCases() {
+            let cases = allData.cases;
+            if (selectedTags.length > 0) {
+                cases = cases.filter(c => selectedTags.some(tag => c.tags?.includes(tag)));
+            }
+            cases.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            const container = document.getElementById('casesGrid');
+            if (cases.length === 0) {
+                container.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><div class="empty-icon">📚</div><p>暂无案例</p></div>';
+                return;
+            }
+
+            container.innerHTML = cases.map(c => `
+                <div class="case-card" onclick="showCaseDetail('${c.id}')">
+                    <div class="case-header">
+                        <div class="case-title">${c.stockName} ${c.stockCode}</div>
+                        <div class="case-date">${formatDate(c.date)}</div>
+                    </div>
+                    <div class="case-body">
+                        <div class="case-info-row"><span class="case-label">方法</span><span class="case-value">${c.method}</span></div>
+                        ${c.support ? `<div class="case-info-row"><span class="case-label">支撑</span><span class="case-value">${c.support}</span></div>` : ''}
+                        ${c.resistance ? `<div class="case-info-row"><span class="case-label">压力</span><span class="case-value">${c.resistance}</span></div>` : ''}
+                        ${c.pptId ? `<div class="case-info-row"><span class="case-label">PPT</span><span class="case-value" style="color: var(--success);">✓ 已关联</span></div>` : ''}
+                        <div class="case-tags">${c.tags?.map(t => `<span class="case-tag">${t}</span>`).join('') || ''}</div>
+                    </div>
+                    <div class="case-actions" onclick="event.stopPropagation()">
+                        <button class="btn btn-primary btn-sm" onclick="showCaseDetail('${c.id}')">👁️ 查看</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteCase('${c.id}')">删除</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function handleCaseSubmit(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            if (data.tags) data.tags = data.tags.split(',').map(t => t.trim()).filter(t => t);
+
+            // 添加PPT关联
+            const pptSelect = document.getElementById('casePptSelect');
+            if (pptSelect.value) {
+                data.pptId = pptSelect.value;
+                data.slideNumber = selectedSlideNumber;
+            }
+
+            try {
+                const response = await fetch('/api/cases', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    closeModal('addCaseModal');
+                    e.target.reset();
+                    selectedSlideNumber = null;
+                    document.getElementById('casePptSlidesContainer').style.display = 'none';
+                    loadAllData();
+                    alert('案例添加成功！');
+                }
+            } catch (err) {
+                alert('添加失败');
+            }
+        }
+
+        async function deleteCase(id) {
+            if (!confirm('确定删除？')) return;
+            try {
+                await fetch(`/api/cases/${id}`, { method: 'DELETE' });
+                loadAllData();
+            } catch (err) {
+                alert('删除失败');
+            }
+        }
+
+        function showCaseDetail(caseId) {
+            const c = allData.cases.find(item => item.id === caseId);
+            if (!c) return;
+
+            let pptSection = '';
+            if (c.pptId) {
+                const ppt = allData.pptLibrary.find(p => p.id === c.pptId);
+                if (ppt) {
+                    const slide = ppt.slides.find(s => s.slideNumber === c.slideNumber);
+                    if (slide) {
+                        pptSection = `
+                            <div style="margin-top: 20px; padding: 20px; background: #f0fff4; border-radius: 12px;">
+                                <h4 style="margin-bottom: 15px; color: #22543d;">📑 关联PPT: ${ppt.title}</h4>
+                                <p style="color: #666; margin-bottom: 10px;">第 ${c.slideNumber} 页</p>
+                                <img src="${slide.path}" style="max-width: 100%; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" onclick="window.open('${slide.path}', '_blank')">
+                                <p style="color: #999; font-size: 12px; margin-top: 10px;">点击图片查看大图</p>
+                            </div>
+                        `;
+                    }
+                }
+            }
+
+            document.getElementById('caseDetailContent').innerHTML = `
+                <div class="form-section">
+                    <div class="form-title">${c.stockName} ${c.stockCode}</div>
+                    <div class="case-info-row"><span class="case-label">日期</span><span class="case-value">${formatDate(c.date)}</span></div>
+                    <div class="case-info-row"><span class="case-label">方法</span><span class="case-value">${c.method}</span></div>
+                    ${c.support ? `<div class="case-info-row"><span class="case-label">支撑/买点</span><span class="case-value">${c.support}</span></div>` : ''}
+                    ${c.resistance ? `<div class="case-info-row"><span class="case-label">压力/卖点</span><span class="case-value">${c.resistance}</span></div>` : ''}
+                    ${c.stopLoss ? `<div class="case-info-row"><span class="case-label">止损位</span><span class="case-value">${c.stopLoss}</span></div>` : ''}
+                    ${c.target ? `<div class="case-info-row"><span class="case-label">目标位</span><span class="case-value">${c.target}</span></div>` : ''}
+                    ${c.content ? `<div style="margin-top: 15px; padding: 15px; background: var(--light); border-radius: 10px;"><p>${c.content}</p></div>` : ''}
+                    <div class="case-tags" style="margin-top: 15px;">${c.tags?.map(t => `<span class="case-tag">${t}</span>`).join('') || ''}</div>
+                    ${pptSection}
+                </div>
+            `;
+
+            document.getElementById('caseDetailModal').classList.add('show');
+        }
+
+        // PPT库
+        function renderPptLibrary() {
+            let ppts = allData.pptLibrary;
+            if (selectedTags.length > 0) {
+                ppts = ppts.filter(p => selectedTags.some(tag => p.tags?.includes(tag)));
+            }
+            ppts.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            const container = document.getElementById('pptGrid');
+            if (ppts.length === 0) {
+                container.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><div class="empty-icon">📑</div><p>暂无PPT</p></div>';
+                return;
+            }
+
+            container.innerHTML = ppts.map(p => `
+                <div class="ppt-card">
+                    <div class="case-header">
+                        <div class="case-title">${p.title}</div>
+                        <div class="case-date">${formatDate(p.date)} · ${p.slides?.length || 0}页</div>
+                    </div>
+                    ${p.slides && p.slides.length > 0 ? `
+                    <div class="ppt-preview">
+                        ${p.slides.slice(0, 3).map(s => `<img src="${s.path}">`).join('')}
+                    </div>
+                    ` : ''}
+                    <div class="case-body">
+                        ${p.verificationType ? `<div class="case-info-row"><span class="case-label">类型</span><span class="case-value">${p.verificationType}</span></div>` : ''}
+                        <div class="case-tags">${p.tags?.map(t => `<span class="case-tag">${t}</span>`).join('') || ''}</div>
+                    </div>
+                    <div class="case-actions">
+                        <button class="btn btn-primary btn-sm" onclick="viewPptDetail('${p.id}')">👁️ 查看</button>
+                        <button class="btn btn-danger btn-sm" onclick="deletePpt('${p.id}')">删除</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function viewPptDetail(pptId) {
+            const ppt = allData.pptLibrary.find(p => p.id === pptId);
+            if (!ppt) return;
+
+            document.getElementById('viewPptTitle').textContent = `📑 ${ppt.title}`;
+            document.getElementById('viewPptContent').innerHTML = `
+                <div class="form-section">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">日期</label>
+                            <p>${formatDate(ppt.date)}</p>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">页面数</label>
+                            <p>${ppt.slides?.length || 0} 页</p>
+                        </div>
+                        ${ppt.verificationType ? `
+                        <div class="form-group">
+                            <label class="form-label">类型</label>
+                            <p>${ppt.verificationType}</p>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">标签</label>
+                        <div class="case-tags">${ppt.tags?.map(t => `<span class="case-tag">${t}</span>`).join('') || '无'}</div>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h4 class="form-title">PPT页面</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px;">
+                        ${ppt.slides?.map((s, idx) => `
+                            <div style="border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer;" onclick="window.open('${s.path}', '_blank')">
+                                <img src="${s.path}" style="width: 100%; height: 150px; object-fit: cover;">
+                                <div style="padding: 10px; background: #f7fafc; text-align: center; font-size: 13px;">
+                                    第 ${idx + 1} 页
+                                </div>
+                            </div>
+                        `).join('') || '<p style="color: #999;">无页面</p>'}
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('viewPptModal').classList.add('show');
+        }
+
+        async function deletePpt(id) {
+            if (!confirm('确定删除？这将删除PPT及其所有页面图片。')) return;
+            try {
+                await fetch(`/api/ppt-library/${id}`, { method: 'DELETE' });
+                loadAllData();
+            } catch (err) {
+                alert('删除失败');
+            }
+        }
+
+        // 更新案例表单中的PPT选择器
+        function updateCasePptSelect() {
+            const select = document.getElementById('casePptSelect');
+            select.innerHTML = '<option value="">不关联PPT</option>' +
+                allData.pptLibrary.map(p => `<option value="${p.id}">${p.title} (${p.slides?.length || 0}页)</option>`).join('');
+        }
+
+        function loadCasePptSlides() {
+            const pptId = document.getElementById('casePptSelect').value;
+            const container = document.getElementById('casePptSlidesContainer');
+            const slidesGrid = document.getElementById('casePptSlides');
+            
+            if (!pptId) {
+                container.style.display = 'none';
+                return;
+            }
+
+            const ppt = allData.pptLibrary.find(p => p.id === pptId);
+            if (!ppt || !ppt.slides) {
+                container.style.display = 'none';
+                return;
+            }
+
+            container.style.display = 'block';
+            slidesGrid.innerHTML = ppt.slides.map(s => `
+                <div class="slide-item ${selectedSlideNumber === s.slideNumber ? 'selected' : ''}" onclick="selectCaseSlide(${s.slideNumber})">
+                    <span class="slide-number">${s.slideNumber}</span>
+                    <img src="${s.path}">
+                </div>
+            `).join('');
+        }
+
+        function selectCaseSlide(slideNumber) {
+            selectedSlideNumber = slideNumber;
+            loadCasePptSlides();
+        }
+
+        // 反馈
+        function renderFeedback() {
+            let feedback = allData.feedback;
+            if (selectedTags.length > 0) {
+                feedback = feedback.filter(f => selectedTags.some(tag => f.tags?.includes(tag)));
+            }
+            feedback.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            const container = document.getElementById('feedbackGrid');
+            if (feedback.length === 0) {
+                container.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><div class="empty-icon">💬</div><p>暂无反馈</p></div>';
+                return;
+            }
+
+            container.innerHTML = feedback.map(f => `
+                <div class="case-card">
+                    <div class="case-header">
+                        <div class="case-title">${f.studentName}</div>
+                        <div class="case-date">${formatDate(f.date)}</div>
+                    </div>
+                    <div class="case-body">
+                        <p style="color: #666; margin-bottom: 12px; font-size: 14px;">${f.content}</p>
+                        ${f.profit ? `<div class="case-info-row"><span class="case-label">收益</span><span class="case-value" style="color: #48bb78;">${f.profit}</span></div>` : ''}
+                        ${f.method ? `<div class="case-info-row"><span class="case-label">方法</span><span class="case-value">${f.method}</span></div>` : ''}
+                        <div class="case-tags">${f.tags?.map(t => `<span class="case-tag">${t}</span>`).join('') || ''}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function handleFeedbackSubmit(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            if (data.tags) data.tags = data.tags.split(',').map(t => t.trim()).filter(t => t);
+
+            try {
+                const response = await fetch('/api/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    closeModal('addFeedbackModal');
+                    e.target.reset();
+                    loadAllData();
+                    alert('反馈添加成功！');
+                }
+            } catch (err) {
+                alert('添加失败');
+            }
+        }
+
+        // AI提取
+        function extractFromText() {
+            const text = document.getElementById('extractText').value;
+            if (!text.trim()) { alert('请输入文本'); return; }
+
+            const stockPattern = /([\u4e00-\u9fa5]{2,6})\s*[(\[]?([A-Z]{1,5})[)\]]?/g;
+            const pricePattern = /(\d+\.?\d*)\s*(美元|刀|\$)?/g;
+            const methodPattern = /(支撑|压力|风险|机会|买点|卖点|止损|止盈|筹码|机构|AI赢家|K线|飘带|DeepChart)/g;
+
+            const stocks = [], prices = [], methods = [];
+            let match;
+            while ((match = stockPattern.exec(text)) !== null) stocks.push({ name: match[1], code: match[2] });
+            while ((match = pricePattern.exec(text)) !== null) prices.push(match[1] + (match[2] || '美元'));
+            while ((match = methodPattern.exec(text)) !== null) methods.push(match[1]);
+
+            document.getElementById('extractResult').innerHTML = `
+                <div class="extract-result">
+                    <div class="extract-section">
+                        <div class="extract-section-title">📈 股票 (${stocks.length})</div>
+                        ${stocks.map(s => `<span class="extract-item">${s.name} ${s.code}</span>`).join('') || '<span style="color:#999">无</span>'}
+                    </div>
+                    <div class="extract-section">
+                        <div class="extract-section-title">💰 价格 (${prices.length})</div>
+                        ${prices.map(p => `<span class="extract-item">${p}</span>`).join('') || '<span style="color:#999">无</span>'}
+                    </div>
+                    <div class="extract-section">
+                        <div class="extract-section-title">🔍 方法 (${methods.length})</div>
+                        ${[...new Set(methods)].map(m => `<span class="extract-item">${m}</span>`).join('') || '<span style="color:#999">无</span>'}
+                    </div>
+                </div>
+                <button class="btn btn-primary" style="width: 100%; margin-top: 15px;" onclick="useExtractedData()">✓ 使用数据创建案例</button>
+            `;
+        }
+
+        function useExtractedData() {
+            closeModal('extractModal');
+            showAddCaseModal();
+        }
+
+        // 搜索功能
+        async function performSearch() {
+            const keyword = document.getElementById('globalSearch').value.trim();
+            if (!keyword) {
+                document.getElementById('searchResultsContainer').innerHTML = '';
+                return;
+            }
+
+            // 本地搜索案例
+            const matchedCases = allData.cases.filter(c =>
+                c.stockName?.toLowerCase().includes(keyword.toLowerCase()) ||
+                c.stockCode?.toLowerCase().includes(keyword.toLowerCase()) ||
+                c.method?.toLowerCase().includes(keyword.toLowerCase()) ||
+                c.tags?.some(t => t.toLowerCase().includes(keyword.toLowerCase()))
+            );
+
+            // 搜索PPT库
+            let pptResults = [];
+            allData.pptLibrary.forEach(ppt => {
+                // 搜索PPT标题
+                if (ppt.title?.toLowerCase().includes(keyword.toLowerCase())) {
+                    pptResults.push({
+                        type: 'ppt',
+                        ppt: ppt,
+                        matchType: 'title',
+                        matchText: ppt.title
+                    });
+                }
+                // 搜索标签
+                else if (ppt.tags?.some(tag => tag.toLowerCase().includes(keyword.toLowerCase()))) {
+                    const matchedTags = ppt.tags.filter(t => t.toLowerCase().includes(keyword.toLowerCase()));
+                    pptResults.push({
+                        type: 'ppt',
+                        ppt: ppt,
+                        matchType: 'tag',
+                        matchText: matchedTags.join(', ')
+                    });
+                }
+            });
+
+            let html = '';
+            
+            if (matchedCases.length > 0) {
+                html += `
+                    <div class="search-results">
+                        <h4 style="margin-bottom: 15px;">📚 匹配的案例 (${matchedCases.length})</h4>
+                        ${matchedCases.map(c => {
+                            let pptPreview = '';
+                            if (c.pptId) {
+                                const ppt = allData.pptLibrary.find(p => p.id === c.pptId);
+                                if (ppt) {
+                                    const slide = ppt.slides.find(s => s.slideNumber === c.slideNumber);
+                                    if (slide) {
+                                        pptPreview = `<img src="${slide.path}" class="result-preview-img" onclick="event.stopPropagation(); window.open('${slide.path}', '_blank')">`;
+                                    }
+                                }
+                            }
+                            return `
+                                <div class="search-result-item" onclick="showCaseDetail('${c.id}')">
+                                    <div class="result-ppt-title">${c.stockName} ${c.stockCode}</div>
+                                    <div class="result-match-info">${c.method} · ${formatDate(c.date)}</div>
+                                    ${pptPreview}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            }
+
+            if (pptResults.length > 0) {
+                html += `
+                    <div class="search-results">
+                        <h4 style="margin-bottom: 15px;">📑 匹配的PPT (${pptResults.length})</h4>
+                        ${pptResults.map(r => `
+                            <div class="search-result-item" onclick="viewPptDetail('${r.ppt.id}')">
+                                <div class="result-ppt-title">${r.ppt.title}</div>
+                                <div class="result-match-info">匹配: ${r.matchType === 'title' ? '标题' : '标签'} - ${r.matchText}</div>
+                                ${r.ppt.slides && r.ppt.slides.length > 0 ? `
+                                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                        ${r.ppt.slides.slice(0, 3).map(s => `<img src="${s.path}" style="width: 100px; height: 70px; object-fit: cover; border-radius: 6px;">`).join('')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            if (!html) {
+                html = '<div class="search-results"><p style="color: #999; text-align: center;">未找到匹配结果</p></div>';
+            }
+
+            document.getElementById('searchResultsContainer').innerHTML = html;
+        }
+
+        // 图表
+        function renderCharts() {
+            const ctx = document.getElementById('trendChart');
+            if (!ctx) return;
+
+            const last30Days = {};
+            for (let i = 29; i >= 0; i--) {
+                last30Days[moment().subtract(i, 'days').format('MM-DD')] = 0;
+            }
+
+            allData.cases.forEach(c => {
+                const date = moment(c.date).format('MM-DD');
+                if (last30Days.hasOwnProperty(date)) last30Days[date]++;
+            });
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Object.keys(last30Days),
+                    datasets: [{
+                        label: '每日案例数',
+                        data: Object.values(last30Days),
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+        }
+
+        // 数据管理
+        function loadDataToEditor() {
+            document.getElementById('dataJsonEditor').value = JSON.stringify(allData, null, 2);
+        }
+
+        async function saveDataFromEditor() {
+            try {
+                const data = JSON.parse(document.getElementById('dataJsonEditor').value);
+                const response = await fetch('/api/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    loadAllData();
+                    alert('保存成功！');
+                }
+            } catch (e) {
+                alert('JSON格式错误: ' + e.message);
+            }
+        }
+
+        function exportAllData() {
+            const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `stock-cases-${moment().format('YYYY-MM-DD')}.json`;
+            a.click();
+        }
+
+        async function importFromFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (confirm('导入将覆盖现有数据，确定继续吗？')) {
+                        await fetch('/api/import', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+                        loadAllData();
+                        alert('导入成功！');
+                    }
+                } catch (err) {
+                    alert('文件格式错误');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // PPT上传相关
+        function handlePptFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (!file.name.endsWith('.pptx') && !file.name.endsWith('.ppt')) {
+                alert('请选择 .pptx 或 .ppt 文件');
+                return;
+            }
+            
+            selectedPptFile = file;
+            document.getElementById('pptFileName').textContent = file.name;
+            document.getElementById('pptUploadPreview').style.display = 'block';
+            document.getElementById('pptUploadBtn').disabled = false;
+        }
+
+        async function uploadPptFile() {
+            if (!selectedPptFile) {
+                alert('请先选择PPT文件');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('pptFile', selectedPptFile);
+
+            document.getElementById('pptUploadStep1').style.display = 'none';
+            document.getElementById('pptUploadProgress').style.display = 'block';
+
+            try {
+                const response = await fetch('/api/ppt-library/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentPptFileId = result.fileId;
+                    extractedPptSlides = result.slides || [];
+                    
+                    document.getElementById('pptUploadProgress').style.display = 'none';
+                    document.getElementById('pptUploadStep2').style.display = 'block';
+                    document.getElementById('pptSlideCount').textContent = extractedPptSlides.length;
+                    document.getElementById('pptUploadDate').value = new Date().toISOString().split('T')[0];
+                    
+                    // 显示提取的页面
+                    const slidesGrid = document.getElementById('pptSlidesGrid');
+                    if (extractedPptSlides.length > 0) {
+                        slidesGrid.innerHTML = extractedPptSlides.map(s => `
+                            <div class="slide-item">
+                                <span class="slide-number">${s.slideNumber}</span>
+                                <img src="${s.path}" onclick="window.open('${s.path}', '_blank')">
+                            </div>
+                        `).join('');
+                    } else {
+                        slidesGrid.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">未提取到页面</p>';
+                    }
+                } else {
+                    throw new Error(result.error || '上传失败');
+                }
+            } catch (err) {
+                alert('上传失败: ' + err.message);
+                document.getElementById('pptUploadProgress').style.display = 'none';
+                document.getElementById('pptUploadStep1').style.display = 'block';
+            }
+        }
+
+        async function savePptToLibrary() {
+            const title = document.getElementById('pptUploadTitle').value.trim();
+            const date = document.getElementById('pptUploadDate').value;
+            const verificationType = document.getElementById('pptUploadType').value;
+            const tagsStr = document.getElementById('pptUploadTags').value;
+
+            if (!title || !date) {
+                alert('请填写必填项（标题、日期）');
+                return;
+            }
+
+            const data = {
+                title,
+                date,
+                verificationType,
+                tags: tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(t => t) : [],
+                slides: extractedPptSlides,
+                fileId: currentPptFileId
+            };
+
+            try {
+                const response = await fetch('/api/ppt-library', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    closeModal('uploadPptModal');
+                    resetPptUpload();
+                    loadAllData();
+                    alert('PPT已保存到PPT库！');
+                } else {
+                    throw new Error('保存失败');
+                }
+            } catch (err) {
+                alert('保存失败: ' + err.message);
+            }
+        }
+
+        function resetPptUpload() {
+            selectedPptFile = null;
+            extractedPptSlides = [];
+            currentPptFileId = null;
+            
+            document.getElementById('pptFileInput').value = '';
+            document.getElementById('pptFileName').textContent = '';
+            document.getElementById('pptUploadPreview').style.display = 'none';
+            document.getElementById('pptUploadBtn').disabled = true;
+            document.getElementById('pptUploadStep1').style.display = 'block';
+            document.getElementById('pptUploadStep2').style.display = 'none';
+            document.getElementById('pptUploadProgress').style.display = 'none';
+            document.getElementById('pptSlidesGrid').innerHTML = '';
+            document.getElementById('pptUploadTitle').value = '';
+            document.getElementById('pptUploadType').value = '';
+            document.getElementById('pptUploadTags').value = '';
+        }
+
+        // 工具函数
+        function formatDate(dateStr) {
+            return moment(dateStr).format('YYYY年MM月DD日');
+        }
+
+        function showAddCaseModal() {
+            document.getElementById('addCaseModal').classList.add('show');
+            document.querySelector('#caseForm input[name="date"]').value = new Date().toISOString().split('T')[0];
+            updateCasePptSelect();
+        }
+
+        function showUploadPptModal() {
+            document.getElementById('uploadPptModal').classList.add('show');
+            resetPptUpload();
+        }
+
+        function showAddFeedbackModal() {
+            document.getElementById('addFeedbackModal').classList.add('show');
+            document.querySelector('#feedbackForm input[name="date"]').value = new Date().toISOString().split('T')[0];
+        }
+
+        function showExtractModal() {
+            document.getElementById('extractModal').classList.add('show');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+
+        // 点击外部关闭
+        document.querySelectorAll('.modal-overlay').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.classList.remove('show');
+            });
+        });
+    </script>
 </body>
 </html>

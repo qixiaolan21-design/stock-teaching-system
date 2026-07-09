@@ -1,396 +1,400 @@
-/**
- * 股票教学案例管理系统 - 完整版
- * 为YouTube主播运营团队设计
- */
-
 const express = require('express');
 const path = require('path');
-const cors = require('cors');
-const multer = require('multer');
-const JSZip = require('jszip');
 const fs = require('fs');
-const DocumentParser = require('./documentParser');
+const multer = require('multer');
+const AdmZip = require('adm-zip');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// CORS 配置 - 允许所有域名访问
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    if (req.method === 'OPTIONS') {
+        res.sendStatus(200);
+    } else {
+        next();
+    }
+});
+
+// 数据文件路径
+// 使用 Render Disk 或本地目录
+const DATA_DIR = process.env.RENDER_DISK_PATH 
+    ? path.join(process.env.RENDER_DISK_PATH, 'data')
+    : path.join(__dirname, 'data');
+const UPLOADS_DIR = process.env.RENDER_DISK_PATH
+    ? path.join(process.env.RENDER_DISK_PATH, 'uploads')
+    : path.join(__dirname, 'uploads');
+const CASES_FILE = path.join(DATA_DIR, 'cases.json');
+const PPT_LIBRARY_FILE = path.join(DATA_DIR, 'ppt_library.json');
+const FEEDBACK_FILE = path.join(DATA_DIR, 'feedback.json');
+
+// 确保目录存在
+if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+// 配置 multer 存储
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, UPLOADS_DIR);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + '-' + file.originalname);
+    }
+});
+
+const upload = multer({ 
+    storage: storage,
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+            file.mimetype === 'application/vnd.ms-powerpoint' ||
+            file.originalname.endsWith('.pptx') ||
+            file.originalname.endsWith('.ppt')) {
+            cb(null, true);
+        } else {
+            cb(new Error('只支持 PPT/PPTX 文件'));
+        }
+    }
+});
+
+// 初始化数据文件
+function initDataFile(filePath, defaultData = []) {
+    if (!fs.existsSync(filePath)) {
+        fs.writeFileSync(filePath, JSON.stringify(defaultData, null, 2));
+    }
+}
+
+initDataFile(CASES_FILE);
+initDataFile(PPT_LIBRARY_FILE);
+initDataFile(FEEDBACK_FILE);
+
 // 中间件
-app.use(cors());
-app.use(express.json({ limit: '100mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
 app.use('/uploads', express.static('uploads'));
 
-// 确保目录存在
-['uploads', 'data'].forEach(dir => {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-});
-
-// 内存数据库
-const db = {
-    cases: [],
-    evidence: [],
-    feedback: [],
-    videos: [],
-    documents: [],
-    nasdaq: [],
-    stockPrices: {}
-};
-
-// 文件上传配置
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'uploads/'),
-    filename: (req, file, cb) => {
-        const uniqueName = `${Date.now()}-${Math.round(Math.random()*1E9)}${path.extname(file.originalname)}`;
-        cb(null, uniqueName);
-    }
-});
-const upload = multer({ storage, limits: { fileSize: 100 * 1024 * 1024 } });
-
-const parser = new DocumentParser();
-
-// 初始化演示数据
-function initDemoData() {
-    const today = new Date();
-    for (let i = 90; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-        const base = 14000 + Math.sin(i/15) * 1500 + (Math.random() - 0.5) * 300;
-        db.nasdaq.push({
-            date: date.toISOString().split('T')[0],
-            open: +(base + (Math.random()-0.5)*100).toFixed(2),
-            high: +(base + Math.random()*150).toFixed(2),
-            low: +(base - Math.random()*150).toFixed(2),
-            close: +base.toFixed(2),
-            volume: Math.floor(Math.random() * 5000000)
-        });
-    }
-}
-initDemoData();
-
-// ========== API 路由 ==========
-
-app.get('/api/stats', (req, res) => {
-    res.json({
-        caseCount: db.cases.length,
-        evidenceCount: db.evidence.length,
-        feedbackCount: db.feedback.length,
-        videoCount: db.videos.length,
-        documentCount: db.documents.length
-    });
-});
-
-// ========== 1. 文档上传 - 案例记录 ==========
-
-app.post('/api/documents/upload', upload.single('document'), async (req, res) => {
+// 获取所有数据
+app.get('/api/data', (req, res) => {
     try {
-        if (!req.file) return res.status(400).json({ error: '没有上传文件' });
+        const cases = JSON.parse(fs.readFileSync(CASES_FILE, 'utf-8'));
+        const pptLibrary = JSON.parse(fs.readFileSync(PPT_LIBRARY_FILE, 'utf-8'));
+        const feedback = JSON.parse(fs.readFileSync(FEEDBACK_FILE, 'utf-8'));
         
-        const { originalname, filename, path: filePath } = req.file;
-        const ext = path.extname(originalname).toLowerCase();
-        
-        console.log('上传文件:', originalname, '类型:', ext);
-        
-        // 提取文本
-        let text = '';
-        
-        if (ext === '.txt' || ext === '.csv') {
-            text = fs.readFileSync(filePath, 'utf-8');
-        } else if (ext === '.pptx' || ext === '.docx') {
-            text = await extractOfficeText(filePath, ext);
-        } else if (ext === '.pdf') {
-            try {
-                text = fs.readFileSync(filePath, 'utf-8');
-            } catch (e) {
-                text = extractBinaryText(fs.readFileSync(filePath));
-            }
-        } else {
-            text = extractBinaryText(fs.readFileSync(filePath));
+        res.json({ cases, pptLibrary, feedback });
+    } catch (err) {
+        res.status(500).json({ error: '读取数据失败' });
+    }
+});
+
+// 保存案例
+app.post('/api/cases', (req, res) => {
+    try {
+        const cases = JSON.parse(fs.readFileSync(CASES_FILE, 'utf-8'));
+        const newCase = {
+            id: Date.now().toString(),
+            ...req.body,
+            createdAt: new Date().toISOString()
+        };
+        cases.push(newCase);
+        fs.writeFileSync(CASES_FILE, JSON.stringify(cases, null, 2));
+        res.json({ success: true, data: newCase });
+    } catch (err) {
+        res.status(500).json({ error: '保存失败' });
+    }
+});
+
+// 更新案例
+app.put('/api/cases/:id', (req, res) => {
+    try {
+        let cases = JSON.parse(fs.readFileSync(CASES_FILE, 'utf-8'));
+        const index = cases.findIndex(c => c.id === req.params.id);
+        if (index === -1) {
+            return res.status(404).json({ error: '案例不存在' });
         }
+        cases[index] = { ...cases[index], ...req.body, updatedAt: new Date().toISOString() };
+        fs.writeFileSync(CASES_FILE, JSON.stringify(cases, null, 2));
+        res.json({ success: true, data: cases[index] });
+    } catch (err) {
+        res.status(500).json({ error: '更新失败' });
+    }
+});
+
+// 删除案例
+app.delete('/api/cases/:id', (req, res) => {
+    try {
+        let cases = JSON.parse(fs.readFileSync(CASES_FILE, 'utf-8'));
+        cases = cases.filter(c => c.id !== req.params.id);
+        fs.writeFileSync(CASES_FILE, JSON.stringify(cases, null, 2));
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: '删除失败' });
+    }
+});
+
+// 保存反馈
+app.post('/api/feedback', (req, res) => {
+    try {
+        const feedback = JSON.parse(fs.readFileSync(FEEDBACK_FILE, 'utf-8'));
+        const newFeedback = {
+            id: Date.now().toString(),
+            ...req.body,
+            createdAt: new Date().toISOString()
+        };
+        feedback.push(newFeedback);
+        fs.writeFileSync(FEEDBACK_FILE, JSON.stringify(feedback, null, 2));
+        res.json({ success: true, data: newFeedback });
+    } catch (err) {
+        res.status(500).json({ error: '保存失败' });
+    }
+});
+
+// 删除反馈
+app.delete('/api/feedback/:id', (req, res) => {
+    try {
+        let feedback = JSON.parse(fs.readFileSync(FEEDBACK_FILE, 'utf-8'));
+        feedback = feedback.filter(f => f.id !== req.params.id);
+        fs.writeFileSync(FEEDBACK_FILE, JSON.stringify(feedback, null, 2));
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: '删除失败' });
+    }
+});
+
+// 导入数据
+app.post('/api/import', (req, res) => {
+    try {
+        const { cases, pptLibrary, feedback } = req.body;
+        if (cases) fs.writeFileSync(CASES_FILE, JSON.stringify(cases, null, 2));
+        if (pptLibrary) fs.writeFileSync(PPT_LIBRARY_FILE, JSON.stringify(pptLibrary, null, 2));
+        if (feedback) fs.writeFileSync(FEEDBACK_FILE, JSON.stringify(feedback, null, 2));
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: '导入失败' });
+    }
+});
+
+// 提取PPT中的图片（按幻灯片分组）
+function extractPptImages(pptxPath, outputDir) {
+    const slides = [];
+    try {
+        const zip = new AdmZip(pptxPath);
+        const zipEntries = zip.getEntries();
         
-        console.log('提取文本长度:', text.length);
-        console.log('文本前500字符:', text.substring(0, 500));
+        // PPT中的图片命名通常包含幻灯片编号信息
+        // 例如：image1.png, image2.png 对应不同幻灯片
+        // 或者我们需要按顺序分配
         
-        // 解析股票信息
-        const parseResult = parser.extractStockInfo(text, originalname);
-        
-        // 保存文档记录
-        const docId = Date.now();
-        db.documents.push({
-            id: docId,
-            filename,
-            original_name: originalname,
-            file_type: ext,
-            upload_date: new Date().toISOString(),
-            extracted_text: text.substring(0, 5000),
-            stock_count: parseResult.stocks.length
-        });
-        
-        // 添加到案例库
-        const today = new Date().toISOString().split('T')[0];
-        let addedCount = 0;
-        
-        for (const stock of parseResult.stocks) {
-            const exists = db.cases.find(c => 
-                c.stock_code === stock.stock_code && c.date === today
-            );
-            if (!exists) {
-                db.cases.push({
-                    id: Date.now() + addedCount,
-                    date: today,
-                    ...stock,
-                    source_doc: originalname
+        const allImages = [];
+        zipEntries.forEach(entry => {
+            if (entry.entryName.startsWith('ppt/media/') && 
+                (entry.entryName.endsWith('.png') || 
+                 entry.entryName.endsWith('.jpg') || 
+                 entry.entryName.endsWith('.jpeg'))) {
+                
+                allImages.push({
+                    entryName: entry.entryName,
+                    data: entry.getData()
                 });
-                addedCount++;
             }
-        }
-        
-        res.json({
-            success: true,
-            documentId: docId,
-            filename: originalname,
-            fileType: ext,
-            parsed: parseResult,
-            addedToCases: addedCount,
-            preview: text.substring(0, 1000)
         });
         
-    } catch (error) {
-        console.error('解析文档失败:', error);
-        res.status(500).json({ error: '解析失败: ' + error.message });
-    }
-});
-
-// 提取Office文档文本
-async function extractOfficeText(filePath, ext) {
-    try {
-        const data = fs.readFileSync(filePath);
-        const zip = await JSZip.loadAsync(data);
-        let text = '';
-        
-        if (ext === '.pptx') {
-            // PPTX: 提取所有幻灯片文本
-            const slideFiles = Object.keys(zip.files).filter(f => 
-                f.startsWith('ppt/slides/slide') && f.endsWith('.xml')
-            );
+        // 按顺序分配图片到幻灯片（每张幻灯片可能有多个图片）
+        // 简化处理：每张图片作为一个"页面"
+        allImages.forEach((img, index) => {
+            const ext = path.extname(img.entryName);
+            const imageName = `slide-${index + 1}${ext}`;
+            const imagePath = path.join(outputDir, imageName);
             
-            console.log(`找到 ${slideFiles.length} 页幻灯片`);
-            
-            for (const slideFile of slideFiles.sort()) {
-                try {
-                    const content = await zip.files[slideFile].async('text');
-                    const pageNum = slideFile.match(/slide(\d+)\.xml/)?.[1] || '?';
-                    
-                    // 提取 <a:t> 标签文本
-                    const textMatches = content.match(/<a:t>([^<]+)<\/a:t>/g);
-                    if (textMatches && textMatches.length > 0) {
-                        const slideText = textMatches
-                            .map(m => m.replace(/<\/?a:t>/g, ''))
-                            .join(' ');
-                        text += `[第${pageNum}页] ${slideText}\n`;
-                    }
-                } catch (e) {
-                    console.error(`解析 ${slideFile} 失败:`, e.message);
-                }
-            }
-        } else if (ext === '.docx') {
-            // DOCX: 提取文档文本
-            const docXml = zip.files['word/document.xml'];
-            if (docXml) {
-                const content = await docXml.async('text');
-                const matches = content.match(/<w:t>([^<]+)<\/w:t>/g);
-                if (matches) {
-                    text = matches.map(m => m.replace(/<\/?w:t>/g, '')).join(' ');
-                }
-            }
-        }
-        
-        return text;
-    } catch (e) {
-        console.error('Office提取失败:', e);
-        return extractBinaryText(fs.readFileSync(filePath));
-    }
-}
-
-// 从二进制提取可读文本
-function extractBinaryText(buffer) {
-    let text = '';
-    const str = buffer.toString('utf-8');
-    
-    // 提取中文字符
-    const chineseMatches = str.match(/[\u4e00-\u9fa5]{2,}/g);
-    if (chineseMatches) text += chineseMatches.join(' ');
-    
-    // 提取股票代码（6位数字）
-    const stockMatches = str.match(/\d{6}/g);
-    if (stockMatches) text += ' ' + stockMatches.join(' ');
-    
-    return text;
-}
-
-// 获取案例列表
-app.get('/api/cases', (req, res) => {
-    let result = [...db.cases];
-    if (req.query.date) result = result.filter(c => c.date === req.query.date);
-    if (req.query.stock) result = result.filter(c => c.stock_code === req.query.stock);
-    res.json({ cases: result.sort((a, b) => b.id - a.id) });
-});
-
-// ========== 2. 印证案例库 - PPT课件管理 ==========
-
-app.post('/api/evidence/upload', upload.single('ppt'), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ error: '没有上传PPT' });
-        
-        const { originalname, filename, path: filePath } = req.file;
-        
-        // 提取PPT所有页面
-        const data = fs.readFileSync(filePath);
-        const zip = await JSZip.loadAsync(data);
-        const slides = [];
-        
-        const slideFiles = Object.keys(zip.files)
-            .filter(f => f.match(/ppt\/slides\/slide\d+\.xml/))
-            .sort();
-        
-        for (const slideFile of slideFiles) {
-            const content = await zip.files[slideFile].async('text');
-            const textMatches = content.match(/<a:t>([^<]+)<\/a:t>/g);
-            const slideText = textMatches ? 
-                textMatches.map(m => m.replace(/<\/?a:t>/g, '')).join(' ') : '';
-            
-            const pageNum = parseInt(slideFile.match(/slide(\d+)/)[1]);
-            const stocks = parser.extractStockInfo(slideText);
+            fs.writeFileSync(imagePath, img.data);
             
             slides.push({
-                page: pageNum,
-                text: slideText.substring(0, 500),
-                stocks: stocks.stocks,
-                preview: slideText.substring(0, 200)
+                slideNumber: index + 1,
+                imageName: imageName,
+                path: `/uploads/${path.basename(outputDir)}/${imageName}`,
+                originalName: img.entryName
             });
+        });
+    } catch (err) {
+        console.error('提取图片失败:', err);
+    }
+    return slides;
+}
+
+// 上传PPT到PPT库
+app.post('/api/ppt-library/upload', upload.single('pptFile'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: '没有上传文件' });
         }
+
+        const pptxPath = req.file.path;
+        const fileId = path.basename(req.file.filename, path.extname(req.file.filename));
+        const imagesDir = path.join(UPLOADS_DIR, fileId);
         
+        // 创建图片存放目录
+        if (!fs.existsSync(imagesDir)) {
+            fs.mkdirSync(imagesDir, { recursive: true });
+        }
+
+        // 提取图片（按幻灯片）
+        const slides = extractPptImages(pptxPath, imagesDir);
+
         res.json({
             success: true,
-            filename: originalname,
-            totalSlides: slides.length,
-            slides: slides
+            fileId: fileId,
+            originalName: req.file.originalname,
+            slides: slides,
+            slideCount: slides.length
+        });
+    } catch (err) {
+        console.error('上传处理失败:', err);
+        res.status(500).json({ error: '处理失败: ' + err.message });
+    }
+});
+
+// 保存PPT到PPT库
+app.post('/api/ppt-library', (req, res) => {
+    try {
+        const library = JSON.parse(fs.readFileSync(PPT_LIBRARY_FILE, 'utf-8'));
+        const newPpt = {
+            id: Date.now().toString(),
+            ...req.body,
+            createdAt: new Date().toISOString()
+        };
+        library.push(newPpt);
+        fs.writeFileSync(PPT_LIBRARY_FILE, JSON.stringify(library, null, 2));
+        res.json({ success: true, data: newPpt });
+    } catch (err) {
+        res.status(500).json({ error: '保存失败' });
+    }
+});
+
+// 删除PPT库中的PPT
+app.delete('/api/ppt-library/:id', (req, res) => {
+    try {
+        let library = JSON.parse(fs.readFileSync(PPT_LIBRARY_FILE, 'utf-8'));
+        const ppt = library.find(p => p.id === req.params.id);
+        
+        if (ppt && ppt.fileId) {
+            // 删除上传的文件目录
+            const pptDir = path.join(UPLOADS_DIR, ppt.fileId);
+            if (fs.existsSync(pptDir)) {
+                fs.rmSync(pptDir, { recursive: true });
+            }
+        }
+        
+        library = library.filter(p => p.id !== req.params.id);
+        fs.writeFileSync(PPT_LIBRARY_FILE, JSON.stringify(library, null, 2));
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: '删除失败' });
+    }
+});
+
+// 搜索PPT库
+app.get('/api/ppt-library/search', (req, res) => {
+    try {
+        const { keyword } = req.query;
+        const library = JSON.parse(fs.readFileSync(PPT_LIBRARY_FILE, 'utf-8'));
+        
+        if (!keyword) {
+            return res.json({ results: [] });
+        }
+        
+        const lowerKeyword = keyword.toLowerCase();
+        const results = [];
+        
+        library.forEach(ppt => {
+            // 搜索PPT标题
+            if (ppt.title?.toLowerCase().includes(lowerKeyword)) {
+                results.push({
+                    type: 'ppt',
+                    pptId: ppt.id,
+                    pptTitle: ppt.title,
+                    matchType: 'title',
+                    slides: ppt.slides
+                });
+            }
+            
+            // 搜索标签
+            if (ppt.tags?.some(tag => tag.toLowerCase().includes(lowerKeyword))) {
+                results.push({
+                    type: 'ppt',
+                    pptId: ppt.id,
+                    pptTitle: ppt.title,
+                    matchType: 'tag',
+                    slides: ppt.slides
+                });
+            }
+            
+            // 搜索幻灯片中的案例（如果有标注）
+            if (ppt.cases) {
+                ppt.cases.forEach(caseItem => {
+                    if (caseItem.stockName?.toLowerCase().includes(lowerKeyword) ||
+                        caseItem.stockCode?.toLowerCase().includes(lowerKeyword) ||
+                        caseItem.content?.toLowerCase().includes(lowerKeyword)) {
+                        results.push({
+                            type: 'case',
+                            pptId: ppt.id,
+                            pptTitle: ppt.title,
+                            caseId: caseItem.id,
+                            stockName: caseItem.stockName,
+                            stockCode: caseItem.stockCode,
+                            slideNumber: caseItem.slideNumber,
+                            slideImage: ppt.slides.find(s => s.slideNumber === caseItem.slideNumber)?.path
+                        });
+                    }
+                });
+            }
         });
         
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.json({ results });
+    } catch (err) {
+        res.status(500).json({ error: '搜索失败' });
     }
 });
 
-// 保存印证案例
-app.post('/api/evidence', (req, res) => {
-    const data = { 
-        id: Date.now(), 
-        created_at: new Date().toISOString(),
-        ...req.body 
-    };
-    db.evidence.push(data);
-    res.json({ success: true, id: data.id });
-});
-
-// 搜索印证案例
-app.get('/api/evidence', (req, res) => {
-    let result = [...db.evidence];
-    
-    if (req.query.tag) {
-        const tag = req.query.tag.toLowerCase();
-        result = result.filter(e => 
-            (e.evidence_type && e.evidence_type.toLowerCase().includes(tag)) ||
-            (e.tags && e.tags.some(t => t.toLowerCase().includes(tag)))
-        );
+// 在PPT中添加案例标注
+app.post('/api/ppt-library/:id/cases', (req, res) => {
+    try {
+        let library = JSON.parse(fs.readFileSync(PPT_LIBRARY_FILE, 'utf-8'));
+        const pptIndex = library.findIndex(p => p.id === req.params.id);
+        
+        if (pptIndex === -1) {
+            return res.status(404).json({ error: 'PPT不存在' });
+        }
+        
+        if (!library[pptIndex].cases) {
+            library[pptIndex].cases = [];
+        }
+        
+        const newCase = {
+            id: Date.now().toString(),
+            ...req.body,
+            createdAt: new Date().toISOString()
+        };
+        
+        library[pptIndex].cases.push(newCase);
+        fs.writeFileSync(PPT_LIBRARY_FILE, JSON.stringify(library, null, 2));
+        
+        res.json({ success: true, data: newCase });
+    } catch (err) {
+        res.status(500).json({ error: '保存失败' });
     }
-    
-    if (req.query.stock) {
-        result = result.filter(e => e.stock_code === req.query.stock);
-    }
-    
-    res.json({ evidence: result.sort((a, b) => b.id - a.id) });
-});
-
-// ========== 3. 会员反馈 ==========
-
-app.post('/api/feedback', upload.single('screenshot'), (req, res) => {
-    const data = {
-        id: Date.now(),
-        created_at: new Date().toISOString(),
-        ...req.body,
-        screenshot: req.file ? req.file.filename : null
-    };
-    db.feedback.push(data);
-    res.json({ success: true, id: data.id });
-});
-
-app.get('/api/feedback', (req, res) => {
-    let result = [...db.feedback];
-    if (req.query.method) {
-        result = result.filter(f => 
-            f.method_tags && f.method_tags.includes(req.query.method)
-        );
-    }
-    res.json({ feedback: result.sort((a, b) => b.id - a.id) });
-});
-
-// ========== 4. 图表展示 ==========
-
-app.get('/api/chart/data', (req, res) => {
-    const caseByDate = {};
-    db.cases.forEach(c => {
-        if (!caseByDate[c.date]) caseByDate[c.date] = [];
-        caseByDate[c.date].push(c.stock_code);
-    });
-    
-    const evidenceByDate = {};
-    db.evidence.forEach(e => {
-        if (!evidenceByDate[e.date]) evidenceByDate[e.date] = 0;
-        evidenceByDate[e.date]++;
-    });
-    
-    res.json({ nasdaq: db.nasdaq, cases: caseByDate, evidence: evidenceByDate });
-});
-
-// ========== 5. 股票验证 ==========
-
-app.get('/api/stock/verify/:code', async (req, res) => {
-    const { code } = req.params;
-    res.json({
-        stock_code: code,
-        current_price: (Math.random() * 100 + 10).toFixed(2),
-        change_percent: (Math.random() * 20 - 10).toFixed(2),
-        verified_at: new Date().toISOString(),
-        note: '此为模拟数据，实际应接入股票API'
-    });
-});
-
-app.post('/api/stock/verify-batch', async (req, res) => {
-    const { codes } = req.body;
-    const results = codes.map(code => ({
-        stock_code: code,
-        current_price: (Math.random() * 100 + 10).toFixed(2),
-        change_percent: (Math.random() * 20 - 10).toFixed(2),
-        trend: Math.random() > 0.5 ? 'up' : 'down'
-    }));
-    res.json({ results });
 });
 
 // 页面路由
-app.get('/', (req, res) => {
+app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 启动
-if (process.env.VERCEL !== '1') {
-    app.listen(PORT, () => {
-        console.log('='.repeat(60));
-        console.log('  股票教学案例管理系统 - YouTube主播运营版');
-        console.log('='.repeat(60));
-        console.log(`  🚀 服务已启动: http://localhost:${PORT}`);
-        console.log('='.repeat(60));
-    });
-}
-
-// Vercel 导出
-module.exports = app;
+app.listen(PORT, () => {
+    console.log(`🚀 股票案例印证系统运行在端口 ${PORT}`);
+});
