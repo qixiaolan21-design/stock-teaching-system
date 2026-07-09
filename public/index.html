@@ -847,7 +847,23 @@
                 return;
             }
 
-            container.innerHTML = cases.map(c => `
+            container.innerHTML = cases.map(c => {
+                // 获取PPT信息
+                let pptInfo = '';
+                if (c.pptId) {
+                    const ppt = allData.pptLibrary.find(p => p.id === c.pptId);
+                    if (ppt) {
+                        pptInfo = `
+                            <div class="case-info-row">
+                                <span class="case-label">📑 来源</span>
+                                <span class="case-value" style="color: var(--primary);">${ppt.title}</span>
+                            </div>
+                            ${c.slideNumber ? `<div class="case-info-row"><span class="case-label">📄 页码</span><span class="case-value">第${c.slideNumber}页</span></div>` : ''}
+                        `;
+                    }
+                }
+                
+                return `
                 <div class="case-card" onclick="showCaseDetail('${c.id}')">
                     <div class="case-header">
                         <div class="case-title">${c.stockName} ${c.stockCode}</div>
@@ -857,7 +873,7 @@
                         <div class="case-info-row"><span class="case-label">方法</span><span class="case-value">${c.method}</span></div>
                         ${c.support ? `<div class="case-info-row"><span class="case-label">支撑</span><span class="case-value">${c.support}</span></div>` : ''}
                         ${c.resistance ? `<div class="case-info-row"><span class="case-label">压力</span><span class="case-value">${c.resistance}</span></div>` : ''}
-                        ${c.pptId ? `<div class="case-info-row"><span class="case-label">PPT</span><span class="case-value" style="color: var(--success);">✓ 已关联</span></div>` : ''}
+                        ${pptInfo}
                         <div class="case-tags">${c.tags?.map(t => `<span class="case-tag">${t}</span>`).join('') || ''}</div>
                     </div>
                     <div class="case-actions" onclick="event.stopPropagation()">
@@ -865,7 +881,7 @@
                         <button class="btn btn-danger btn-sm" onclick="deleteCase('${c.id}')">删除</button>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         async function handleCaseSubmit(e) {
@@ -1000,6 +1016,33 @@
             const ppt = allData.pptLibrary.find(p => p.id === pptId);
             if (!ppt) return;
 
+            // 生成自动提取的案例列表
+            let extractedCasesSection = '';
+            if (ppt.extractedCases && ppt.extractedCases.length > 0) {
+                extractedCasesSection = `
+                    <div class="form-section">
+                        <h4 class="form-title">🤖 自动识别的案例 (${ppt.extractedCases.length})</h4>
+                        <div style="display: grid; gap: 10px;">
+                            ${ppt.extractedCases.map((c, idx) => `
+                                <div style="background: #f0fff4; border-radius: 10px; padding: 15px; border: 1px solid #9ae6b4;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                        <span style="font-weight: 600;">案例 ${idx + 1} - 第${c.slideNumber}页</span>
+                                        <span style="color: #48bb78; font-size: 12px;">置信度: ${c.confidence}%</span>
+                                    </div>
+                                    ${c.stocks.length > 0 ? `<div style="margin-bottom: 5px;"><span style="color: #666;">📈 股票:</span> ${c.stocks.map(s => `${s.code} ${s.type ? '('+s.type+')' : ''}`).join(', ')}</div>` : ''}
+                                    ${c.methods.length > 0 ? `<div style="margin-bottom: 5px;"><span style="color: #666;">🔍 方法:</span> ${c.methods.join(', ')}</div>` : ''}
+                                    ${c.prices.length > 0 ? `<div style="margin-bottom: 5px;"><span style="color: #666;">💰 价格:</span> ${c.prices.map(p => p.value + p.currency).join(', ')}</div>` : ''}
+                                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                        <img src="${c.slideImage}" style="width: 100px; height: 70px; object-fit: cover; border-radius: 6px; cursor: pointer;" onclick="window.open('${c.slideImage}', '_blank')">
+                                        <button class="btn btn-primary btn-sm" onclick="quickCreateCaseFromPpt('${ppt.id}', ${c.slideNumber}, '${c.stocks[0]?.code || ''}', '${c.methods[0] || ''}')" style="align-self: center;">➕ 创建案例</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
             document.getElementById('viewPptTitle').textContent = `📑 ${ppt.title}`;
             document.getElementById('viewPptContent').innerHTML = `
                 <div class="form-section">
@@ -1024,14 +1067,16 @@
                         <div class="case-tags">${ppt.tags?.map(t => `<span class="case-tag">${t}</span>`).join('') || '无'}</div>
                     </div>
                 </div>
+                ${extractedCasesSection}
                 <div class="form-section">
                     <h4 class="form-title">PPT页面</h4>
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px;">
                         ${ppt.slides?.map((s, idx) => `
                             <div style="border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer;" onclick="window.open('${s.path}', '_blank')">
-                                <img src="${s.path}" style="width: 100%; height: 150px; object-fit: cover;">
+                                <img src="${s.path}" loading="lazy" style="width: 100%; height: 150px; object-fit: cover;">
                                 <div style="padding: 10px; background: #f7fafc; text-align: center; font-size: 13px;">
-                                    第 ${idx + 1} 页
+                                    第 ${s.slideNumber || idx + 1} 页
+                                    ${s.isStockChart ? '<span style="color: #48bb78; margin-left: 5px;">📈</span>' : ''}
                                 </div>
                             </div>
                         `).join('') || '<p style="color: #999;">无页面</p>'}
@@ -1040,6 +1085,31 @@
             `;
 
             document.getElementById('viewPptModal').classList.add('show');
+        }
+        
+        // 从PPT快速创建案例
+        function quickCreateCaseFromPpt(pptId, slideNumber, stockCode, method) {
+            // 填充案例表单
+            if (stockCode) {
+                document.querySelector('#caseForm input[name="stockCode"]').value = stockCode;
+                document.querySelector('#caseForm input[name="stockName"]').value = stockCode;
+            }
+            if (method) {
+                document.querySelector('#caseForm select[name="method"]').value = method;
+            }
+            
+            // 设置PPT关联
+            document.getElementById('casePptSelect').value = pptId;
+            selectedSlideNumber = slideNumber;
+            
+            // 关闭PPT详情，打开案例创建
+            closeModal('viewPptModal');
+            showAddCaseModal();
+            
+            // 加载PPT页面选择
+            loadCasePptSlides();
+            
+            showNotification('已自动填充案例信息，请检查并补充', 'success');
         }
 
         async function deletePpt(id) {
