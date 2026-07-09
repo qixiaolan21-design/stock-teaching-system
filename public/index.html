@@ -586,8 +586,13 @@
                         <label class="form-label">标签（用逗号分隔）</label>
                         <input type="text" class="form-input" id="pptUploadTags" placeholder="如：筹码,机构,AI赢家">
                     </div>
+                    <!-- 自动提取的案例 -->
+                    <div class="form-group" id="autoExtractedCasesContainer">
+                        <div id="autoExtractedCases" style="background: #f0fff4; border-radius: 12px; padding: 15px; margin-bottom: 15px;"></div>
+                    </div>
+                    
                     <div class="form-group">
-                        <label class="form-label">提取的页面 (<span id="pptSlideCount">0</span>张)</label>
+                        <label class="form-label">智能筛选的K线图页面 (<span id="pptSlideCount">0</span>张) <span style="color: #48bb78; font-size: 12px;">已过滤无关页面</span></label>
                         <div class="slide-grid" id="pptSlidesGrid"></div>
                     </div>
                     <div class="data-actions">
@@ -1369,6 +1374,9 @@
             document.getElementById('pptUploadBtn').disabled = false;
         }
 
+        // 存储自动提取的案例
+        let autoExtractedCases = [];
+
         async function uploadPptFile() {
             if (!selectedPptFile) {
                 alert('请先选择PPT文件');
@@ -1391,24 +1399,36 @@
 
                 if (result.success) {
                     currentPptFileId = result.fileId;
-                    extractedPptSlides = result.slides || [];
+                    // 使用智能筛选后的K线图页面
+                    extractedPptSlides = result.stockChartSlides || result.slides || [];
+                    autoExtractedCases = result.extractedCases || [];
                     
                     document.getElementById('pptUploadProgress').style.display = 'none';
                     document.getElementById('pptUploadStep2').style.display = 'block';
                     document.getElementById('pptSlideCount').textContent = extractedPptSlides.length;
                     document.getElementById('pptUploadDate').value = new Date().toISOString().split('T')[0];
                     
-                    // 显示提取的页面
+                    // 显示智能筛选结果
                     const slidesGrid = document.getElementById('pptSlidesGrid');
                     if (extractedPptSlides.length > 0) {
                         slidesGrid.innerHTML = extractedPptSlides.map(s => `
-                            <div class="slide-item">
+                            <div class="slide-item ${s.isStockChart ? 'stock-chart' : ''}" title="${s.analysis?.reason || ''}">
                                 <span class="slide-number">${s.slideNumber}</span>
+                                ${s.isStockChart ? '<span style="position: absolute; top: 5px; right: 5px; background: #48bb78; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;">📈</span>' : ''}
                                 <img src="${s.path}" onclick="window.open('${s.path}', '_blank')">
+                                ${s.stockInfo?.stocks?.length > 0 ? `<div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); color: white; padding: 3px; font-size: 11px; text-align: center;">${s.stockInfo.stocks.map(st => st.code).join(', ')}</div>` : ''}
                             </div>
                         `).join('');
                     } else {
-                        slidesGrid.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">未提取到页面</p>';
+                        slidesGrid.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">未识别到K线图页面</p>';
+                    }
+                    
+                    // 显示自动提取的案例
+                    displayAutoExtractedCases();
+                    
+                    // 显示提示信息
+                    if (result.message) {
+                        showNotification(result.message, 'info');
                     }
                 } else {
                     throw new Error(result.error || '上传失败');
@@ -1418,6 +1438,93 @@
                 document.getElementById('pptUploadProgress').style.display = 'none';
                 document.getElementById('pptUploadStep1').style.display = 'block';
             }
+        }
+        
+        // 显示自动提取的案例
+        function displayAutoExtractedCases() {
+            const container = document.getElementById('autoExtractedCases');
+            if (!container) return;
+            
+            if (autoExtractedCases.length === 0) {
+                container.innerHTML = '<p style="color: #999; padding: 10px;">未自动识别到股票案例</p>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <h4 style="margin-bottom: 15px; color: #22543d;">🤖 自动识别的案例 (${autoExtractedCases.length})</h4>
+                <p style="color: #666; font-size: 13px; margin-bottom: 15px;">以下案例从PPT中自动提取，点击可快速创建</p>
+                ${autoExtractedCases.map((c, idx) => `
+                    <div style="background: white; border-radius: 10px; padding: 15px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="font-weight: 600;">案例 ${idx + 1} - 第${c.slideNumber}页</span>
+                            <span style="color: #48bb78; font-size: 12px;">置信度: ${c.confidence}%</span>
+                        </div>
+                        ${c.stocks.length > 0 ? `<div style="margin-bottom: 8px;"><span style="color: #666;">股票:</span> ${c.stocks.map(s => `${s.code} (${s.type})`).join(', ')}</div>` : ''}
+                        ${c.methods.length > 0 ? `<div style="margin-bottom: 8px;"><span style="color: #666;">方法:</span> ${c.methods.join(', ')}</div>` : ''}
+                        ${c.prices.length > 0 ? `<div style="margin-bottom: 8px;"><span style="color: #666;">价格:</span> ${c.prices.map(p => p.value + p.currency).join(', ')}</div>` : ''}
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <img src="${c.slideImage}" style="width: 120px; height: 80px; object-fit: cover; border-radius: 6px; cursor: pointer;" onclick="window.open('${c.slideImage}', '_blank')">
+                            <button class="btn btn-primary btn-sm" onclick="createCaseFromExtracted(${idx})" style="align-self: center;">➕ 创建案例</button>
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+        }
+        
+        // 从自动提取的案例创建
+        function createCaseFromExtracted(index) {
+            const caseData = autoExtractedCases[index];
+            if (!caseData) return;
+            
+            // 填充表单数据
+            const stock = caseData.stocks[0];
+            if (stock) {
+                document.querySelector('#caseForm input[name="stockCode"]').value = stock.code;
+            }
+            if (caseData.methods.length > 0) {
+                document.querySelector('#caseForm select[name="method"]').value = caseData.methods[0];
+            }
+            
+            // 关闭PPT上传模态框，打开案例创建模态框
+            closeModal('uploadPptModal');
+            showAddCaseModal();
+            
+            // 提示用户
+            showNotification('已自动填充案例信息，请检查并补充', 'success');
+        }
+        
+        // 显示通知
+        function showNotification(message, type = 'info') {
+            const colors = {
+                info: '#667eea',
+                success: '#48bb78',
+                warning: '#ed8936',
+                error: '#f56565'
+            };
+            
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${colors[type] || colors.info};
+                color: white;
+                padding: 15px 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 10000;
+                font-size: 14px;
+                max-width: 300px;
+                animation: slideIn 0.3s ease;
+            `;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 5000);
         }
 
         async function savePptToLibrary() {
@@ -1437,6 +1544,7 @@
                 verificationType,
                 tags: tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(t => t) : [],
                 slides: extractedPptSlides,
+                extractedCases: autoExtractedCases,
                 fileId: currentPptFileId
             };
 
@@ -1463,6 +1571,7 @@
         function resetPptUpload() {
             selectedPptFile = null;
             extractedPptSlides = [];
+            autoExtractedCases = [];
             currentPptFileId = null;
             
             document.getElementById('pptFileInput').value = '';
@@ -1473,6 +1582,7 @@
             document.getElementById('pptUploadStep2').style.display = 'none';
             document.getElementById('pptUploadProgress').style.display = 'none';
             document.getElementById('pptSlidesGrid').innerHTML = '';
+            document.getElementById('autoExtractedCases').innerHTML = '';
             document.getElementById('pptUploadTitle').value = '';
             document.getElementById('pptUploadType').value = '';
             document.getElementById('pptUploadTags').value = '';

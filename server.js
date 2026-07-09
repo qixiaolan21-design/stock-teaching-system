@@ -180,17 +180,150 @@ app.post('/api/import', (req, res) => {
     }
 });
 
-// 提取PPT中的图片（按幻灯片分组）
+// 智能分析图片是否包含K线图特征
+function analyzeImageForStockChart(imageBuffer) {
+    // 这里使用简单的启发式算法
+    // 实际生产环境可以使用 TensorFlow.js 或调用 AI API
+    
+    // 检查图片文件名是否包含股票相关关键词
+    const stockKeywords = ['chart', 'kline', 'candle', 'stock', 'price', 'trend', 'analysis'];
+    
+    // 检查图片大小（K线图通常较大）
+    const isLargeEnough = imageBuffer.length > 50000; // 大于50KB
+    
+    // 简单的评分系统
+    let score = 0;
+    if (isLargeEnough) score += 30;
+    
+    // 返回分析结果
+    return {
+        isLikelyStockChart: score >= 30,
+        confidence: score,
+        reason: isLargeEnough ? '图片尺寸符合K线图特征' : '图片尺寸较小'
+    };
+}
+
+// 从PPT的 notesSlide 或 slide XML 中提取文本
+function extractSlideText(pptxPath, slideNumber) {
+    const texts = [];
+    try {
+        const zip = new AdmZip(pptxPath);
+        
+        // 尝试读取 slide 的 notes
+        const notesPath = `ppt/notesSlides/notesSlide${slideNumber}.xml`;
+        const notesEntry = zip.getEntry(notesPath);
+        
+        if (notesEntry) {
+            const notesContent = notesEntry.getData().toString('utf8');
+            // 提取文本内容（简单的正则提取）
+            const textMatches = notesContent.match(/<a:t>([^<]+)<\/a:t>/g);
+            if (textMatches) {
+                textMatches.forEach(match => {
+                    const text = match.replace(/<\/?a:t>/g, '');
+                    if (text.trim()) texts.push(text.trim());
+                });
+            }
+        }
+        
+        // 也尝试读取 slide 本身的文本
+        const slidePath = `ppt/slides/slide${slideNumber}.xml`;
+        const slideEntry = zip.getEntry(slidePath);
+        
+        if (slideEntry) {
+            const slideContent = slideEntry.getData().toString('utf8');
+            const textMatches = slideContent.match(/<a:t>([^<]+)<\/a:t>/g);
+            if (textMatches) {
+                textMatches.forEach(match => {
+                    const text = match.replace(/<\/?a:t>/g, '');
+                    if (text.trim() && text.length > 2) texts.push(text.trim());
+                });
+            }
+        }
+    } catch (err) {
+        console.error('提取幻灯片文本失败:', err);
+    }
+    return texts;
+}
+
+// 从文本中提取股票信息
+function extractStockInfoFromText(texts) {
+    const allText = texts.join(' ');
+    
+    // 股票代码模式 (AAPL, MSFT, 00700, etc.)
+    const stockCodePattern = /\b([A-Z]{1,5})\b|\b(\d{4,6})\b/g;
+    
+    // 股票名称模式（中文）
+    const stockNamePattern = /([\u4e00-\u9fa5]{2,10})(?:股票|股份|集团|公司|科技|生物|医药|银行|保险|证券|基金|ETF|美股|港股|A股)/g;
+    
+    // 分析方法关键词
+    const methodKeywords = {
+        '支撑压力': ['支撑', '压力', '阻力位', '支撑位', '突破', '跌破'],
+        '筹码分析': ['筹码', '主力', '散户', '成本', '集中', '分散'],
+        '机构DeepChart': ['机构', 'DC', 'DeepChart', '大单', '资金流向'],
+        'AI赢家K线': ['AI赢家', 'K线密码', '赢家', '信号', '买入', '卖出'],
+        '飘带': ['飘带', '趋势', '多空', '红飘带', '绿飘带'],
+        '量能': ['量能', '成交量', '放量', '缩量', '天量', '地量'],
+        '趋势': ['趋势', '上涨', '下跌', '震荡', '盘整', '突破']
+    };
+    
+    const stocks = [];
+    const methods = [];
+    
+    // 提取股票代码
+    let match;
+    const foundCodes = new Set();
+    while ((match = stockCodePattern.exec(allText)) !== null) {
+        const code = match[1] || match[2];
+        if (code && !foundCodes.has(code)) {
+            foundCodes.add(code);
+            stocks.push({
+                code: code,
+                name: null, // 暂时无法确定名称
+                type: /^[A-Z]+$/.test(code) ? '美股' : '港股/A股'
+            });
+        }
+    }
+    
+    // 提取分析方法
+    for (const [method, keywords] of Object.entries(methodKeywords)) {
+        for (const keyword of keywords) {
+            if (allText.includes(keyword)) {
+                if (!methods.includes(method)) {
+                    methods.push(method);
+                }
+                break;
+            }
+        }
+    }
+    
+    // 提取价格信息
+    const pricePattern = /(\d+\.?\d*)\s*(美元|刀|\$|元|港币|港元)/g;
+    const prices = [];
+    while ((match = pricePattern.exec(allText)) !== null) {
+        prices.push({
+            value: match[1],
+            currency: match[2]
+        });
+    }
+    
+    return {
+        stocks: stocks.slice(0, 5), // 最多5个股票
+        methods: methods,
+        prices: prices.slice(0, 3), // 最多3个价格
+        rawText: allText.substring(0, 500) // 原始文本前500字符
+    };
+}
+
+// 提取PPT中的图片（智能筛选K线图）
 function extractPptImages(pptxPath, outputDir) {
     const slides = [];
+    const extractedCases = [];
+    
     try {
         const zip = new AdmZip(pptxPath);
         const zipEntries = zip.getEntries();
         
-        // PPT中的图片命名通常包含幻灯片编号信息
-        // 例如：image1.png, image2.png 对应不同幻灯片
-        // 或者我们需要按顺序分配
-        
+        // 收集所有图片
         const allImages = [];
         zipEntries.forEach(entry => {
             if (entry.entryName.startsWith('ppt/media/') && 
@@ -205,29 +338,64 @@ function extractPptImages(pptxPath, outputDir) {
             }
         });
         
-        // 按顺序分配图片到幻灯片（每张幻灯片可能有多个图片）
-        // 简化处理：每张图片作为一个"页面"
+        console.log(`找到 ${allImages.length} 张图片，开始智能分析...`);
+        
+        // 分析每张图片
         allImages.forEach((img, index) => {
+            const slideNumber = index + 1;
             const ext = path.extname(img.entryName);
-            const imageName = `slide-${index + 1}${ext}`;
+            const imageName = `slide-${slideNumber}${ext}`;
             const imagePath = path.join(outputDir, imageName);
             
+            // 分析图片是否可能是K线图
+            const analysis = analyzeImageForStockChart(img.data);
+            
+            // 提取幻灯片文本
+            const slideTexts = extractSlideText(pptxPath, slideNumber);
+            const stockInfo = extractStockInfoFromText(slideTexts);
+            
+            // 保存图片
             fs.writeFileSync(imagePath, img.data);
             
-            slides.push({
-                slideNumber: index + 1,
+            const slideData = {
+                slideNumber: slideNumber,
                 imageName: imageName,
                 path: `/uploads/${path.basename(outputDir)}/${imageName}`,
-                originalName: img.entryName
-            });
+                originalName: img.entryName,
+                analysis: analysis,
+                isStockChart: analysis.isLikelyStockChart || stockInfo.stocks.length > 0,
+                extractedText: slideTexts.slice(0, 10), // 前10条文本
+                stockInfo: stockInfo
+            };
+            
+            slides.push(slideData);
+            
+            // 如果识别出股票信息，自动创建案例候选
+            if (stockInfo.stocks.length > 0 || stockInfo.methods.length > 0) {
+                extractedCases.push({
+                    slideNumber: slideNumber,
+                    slideImage: slideData.path,
+                    stocks: stockInfo.stocks,
+                    methods: stockInfo.methods,
+                    prices: stockInfo.prices,
+                    confidence: analysis.confidence + (stockInfo.stocks.length * 20)
+                });
+            }
         });
+        
+        console.log(`分析完成，识别出 ${extractedCases.length} 个潜在案例`);
+        
     } catch (err) {
         console.error('提取图片失败:', err);
     }
-    return slides;
+    
+    return {
+        slides: slides,
+        extractedCases: extractedCases.sort((a, b) => b.confidence - a.confidence) // 按置信度排序
+    };
 }
 
-// 上传PPT到PPT库
+// 上传PPT到PPT库（智能筛选K线图）
 app.post('/api/ppt-library/upload', upload.single('pptFile'), (req, res) => {
     try {
         if (!req.file) {
@@ -243,15 +411,22 @@ app.post('/api/ppt-library/upload', upload.single('pptFile'), (req, res) => {
             fs.mkdirSync(imagesDir, { recursive: true });
         }
 
-        // 提取图片（按幻灯片）
-        const slides = extractPptImages(pptxPath, imagesDir);
+        // 智能提取图片和案例
+        const result = extractPptImages(pptxPath, imagesDir);
+        
+        // 过滤出可能是K线图的页面
+        const stockChartSlides = result.slides.filter(s => s.isStockChart);
 
         res.json({
             success: true,
             fileId: fileId,
             originalName: req.file.originalname,
-            slides: slides,
-            slideCount: slides.length
+            slides: result.slides,
+            stockChartSlides: stockChartSlides,
+            extractedCases: result.extractedCases,
+            slideCount: result.slides.length,
+            stockChartCount: stockChartSlides.length,
+            message: `共提取 ${result.slides.length} 页，识别出 ${stockChartSlides.length} 页可能包含K线图`
         });
     } catch (err) {
         console.error('上传处理失败:', err);
